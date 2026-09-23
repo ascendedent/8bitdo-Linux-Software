@@ -39,6 +39,10 @@ KNOWN_PIDS = {
 }
 
 USB_DEVICES = Path("/sys/bus/usb/devices")
+# Bluetooth HID devices are not on the USB bus. They appear here as
+# <bus>:<vid>:<pid>.<instance>, bus 0005 for Bluetooth.
+HID_DEVICES = Path("/sys/bus/hid/devices")
+BLUETOOTH_BUS = "0005"
 
 # HID item types and the global tags we care about.
 MAIN, GLOBAL, LOCAL = 0, 1, 2
@@ -202,24 +206,66 @@ def inventory_device(dev: Path) -> dict:
     }
 
 
+def inventory_bluetooth(hid: Path) -> dict:
+    """One Bluetooth HID device, shaped like a USB device with a single interface."""
+    pid = int(hid.name.split(":")[2].split(".")[0], 16)
+    blob = b""
+    try:
+        blob = (hid / "report_descriptor").read_bytes()
+    except OSError as exc:
+        parsed = {"error": str(exc)}
+    else:
+        parsed = parse_descriptor(blob)
+    hid_name = ""
+    for line in read_text(hid / "uevent").splitlines():
+        if line.startswith("HID_NAME="):
+            hid_name = line.split("=", 1)[1]
+    nodes = hidraw_nodes(hid)
+    descriptors = [
+        {"hidraw": node.name, "hid_name": hid_name, "descriptor_bytes": len(blob), **parsed} for node in nodes
+    ]
+    return {
+        "sysfs": hid.name,
+        "transport": "bluetooth",
+        "vid": f"{VID:04x}",
+        "pid": f"{pid:04x}",
+        "known_as": KNOWN_PIDS.get(pid, "unknown 8BitDo product"),
+        "bootloader": pid in BOOTLOADER_PIDS,
+        "bootloader_note": BOOTLOADER_PIDS.get(pid, ""),
+        "manufacturer": "",
+        "product": hid_name,
+        "serial_present": False,
+        "serial_is_zeros": False,
+        "bus": "bluetooth",
+        "address": "",
+        "interfaces": [
+            {"interface": "bt", "class": "03", "subclass": "", "protocol": "", "guess": "HID over Bluetooth", "hid": descriptors}
+        ],
+        "config_channel_candidate": bool(parsed.get("vendor_pages")),
+    }
+
+
 def find_devices() -> list[dict]:
     found = []
-    if not USB_DEVICES.is_dir():
-        return found
-    for dev in sorted(USB_DEVICES.iterdir()):
-        vid_text = read_text(dev / "idVendor")
-        if vid_text.lower() != f"{VID:04x}":
-            continue
-        found.append(inventory_device(dev))
+    if USB_DEVICES.is_dir():
+        for dev in sorted(USB_DEVICES.iterdir()):
+            vid_text = read_text(dev / "idVendor")
+            if vid_text.lower() != f"{VID:04x}":
+                continue
+            found.append(inventory_device(dev))
+    if HID_DEVICES.is_dir():
+        for hid in sorted(HID_DEVICES.iterdir()):
+            parts = hid.name.split(":")
+            if len(parts) == 3 and parts[0] == BLUETOOTH_BUS and parts[1].lower() == f"{VID:04x}":
+                found.append(inventory_bluetooth(hid))
     return found
 
 
 def print_human(devices: list[dict]) -> None:
     if not devices:
-        print("No 8BitDo device (vid 2dc8) on USB.")
+        print("No 8BitDo device (vid 2dc8) on USB or paired over Bluetooth.")
         print("Plug in the dongle with the controller on, then off, then the cable,")
-        print("and run this again. Bluetooth will not show up here; check")
-        print("/sys/class/hidraw for HID_ID containing 0002DC8 after pairing.")
+        print("or pair the pad over Bluetooth, and run this again.")
         return
     for dev in devices:
         print(f"{dev['sysfs']}: {dev['vid']}:{dev['pid']}  {dev['product'] or dev['known_as']}")
@@ -227,14 +273,17 @@ def print_human(devices: list[dict]) -> None:
         if dev["bootloader"]:
             print(f"  BOOTLOADER. Do not send anything. {dev['bootloader_note']}")
             continue
-        print(f"  bus {dev['bus']} address {dev['address']}")
-        if dev["serial_present"]:
-            flag = " (all zeros)" if dev["serial_is_zeros"] else ""
-            print(f"  serial string is present{flag}; not printed")
-        print(
-            f"  wireshark: usbmon{int(dev['bus']):01d}  "
-            f"filter usb.device_address == {int(dev['address'])}"
-        )
+        if dev.get("transport") == "bluetooth":
+            print("  transport: Bluetooth HID (bus 0005); capture with btmon, not usbmon")
+        else:
+            print(f"  bus {dev['bus']} address {dev['address']}")
+            if dev["serial_present"]:
+                flag = " (all zeros)" if dev["serial_is_zeros"] else ""
+                print(f"  serial string is present{flag}; not printed")
+            print(
+                f"  wireshark: usbmon{int(dev['bus']):01d}  "
+                f"filter usb.device_address == {int(dev['address'])}"
+            )
         if dev["config_channel_candidate"]:
             print("  vendor usage page present: config channel candidate")
         else:

@@ -40,7 +40,7 @@ The 1.09 image the pad is running was fetched from 8BitDo's update server and di
 
 ## Still open
 
-Bluetooth. Public reports call DirectInput mode `2dc8:301b`, and the 1.09 image plants that id in its identify reply and its Bluetooth PnP record. The workstation's MediaTek MT7925 Bluetooth USB device dropped off the bus on 2026-09-23 and needs a reboot before it can be inventoried. That is the last channel where the pad could have a different report set.
+Bluetooth. Public reports call DirectInput mode `2dc8:301b`, and the 1.09 image plants that id in its identify reply and its Bluetooth PnP record. The workstation's MediaTek MT7925 Bluetooth USB device dropped off the bus on 2026-09-23 and needs a reboot before it can be inventoried. That is the last channel where the pad could have a different report set. The tools are ready for it: after pairing, `tools/inventory.py` lists the pad from the Bluetooth HID bus, and `tools/identify.py --pid 301b` sends the same two identify commands to it. The 1.09 disassembly says the pad's report-`81` handler is only reached from its USB endpoints, so the expected result is silence; an answer would be news.
 
 ## Help wanted: Ultimate 2 owners on Linux
 

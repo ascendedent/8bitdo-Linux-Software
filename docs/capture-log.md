@@ -85,6 +85,14 @@ Same tool and packets as `04_probes`, `--path 3-5.1`. Every reply is the receive
 
 So the receiver runs firmware 1.03 (version byte `0x67`, matching the `u2c_adapter_1.03.dat` header), identifies as `301c`, has no product-string selector (bytes 8-9 zero), and reports its own 5-byte radio address, which differs from the one the pad reports on the cable. The two address bytes are redacted in the committed transcripts. The retest list above is closed: the dongle's report set is the one tabulated in `docs/firmware.md`, and a host on the dongle path is talking to the receiver.
 
+## Planned: Bluetooth, once the adapter is back
+
+1. Pair the pad (`bluetoothctl`, it should appear as `8BitDo Ultimate 2C Wireless Controller`). `tools/inventory.py` then lists it as `0005:2DC8:301B.<n>` with its report descriptor; save that as `08_inventory_bluetooth.txt`.
+2. If the descriptor carries a vendor page, `tools/identify.py --pid 301b`, then `tools/read_config.py --pid 301b --probes --skip crc`. The read tool does not yet accept `301b`; add it to `PAD_PIDS` in `tools/identify.py` when the inventory shows a vendor-page descriptor to send to.
+3. Capture with `btmon -w captures/08_bluetooth.btsnoop` alongside, since usbmon does not see Bluetooth.
+
+Expected from the 1.09 image: no reply. The pad's report-`81` dispatcher has two callers, both in its USB endpoint handler, and the Bluetooth HID path does not reach it.
+
 ## Wireshark filters
 
 Replace `MMM` with the device address from `lsusb` (the number after `Device`).

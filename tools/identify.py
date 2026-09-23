@@ -37,12 +37,17 @@ PAD_PIDS = {
     0x6012: "Ultimate 2 Wireless, DInput",
     0x6013: "Ultimate 2 Wireless dongle",
     0x310B: "Ultimate 2 Wireless, XInput",
+    0x301B: "Ultimate 2C over Bluetooth (the id in its PnP record; not yet seen)",
 }
 
 from packets import IDENTIFY_COMMANDS, IDENTIFY_GET_PID, IDENTIFY_INIT, pad_report
 
-# Overridden by the tests, which build a fake tree.
+# Overridden by the tests, which build fake trees.
 SYSFS_ROOT = Path("/sys/bus/usb/devices")
+# Bluetooth HID devices live here, not under the USB bus, named
+# <bus>:<vid>:<pid>.<instance> with bus 0005 for Bluetooth.
+HID_ROOT = Path("/sys/bus/hid/devices")
+BLUETOOTH_BUS = "0005"
 
 # Exact payloads from captures/exports/00_baseline.txt. pad_report extends
 # each one to the 64-byte interrupt transfer V2 used.
@@ -115,6 +120,25 @@ def find_vendor_interface(pid: int = CONTROLLER_PID, path: str | None = None) ->
                 raise SystemExit(f"{dev.name} interface {number} has no hidraw node")
             matches.append((dev, node, min(pages)))
             break
+    # Bluetooth: one HID device per pad, no USB interface directories.
+    if HID_ROOT.is_dir():
+        for hid in sorted(HID_ROOT.iterdir()):
+            parts = hid.name.split(":")
+            if len(parts) != 3 or parts[0] != BLUETOOTH_BUS or parts[1].lower() != f"{VID:04x}":
+                continue
+            found = int(parts[2].split(".")[0], 16)
+            present.append(f"{found:04x} at {hid.name} (bluetooth)")
+            if found in REFUSE or found != pid:
+                continue
+            if path is not None and hid.name != path:
+                continue
+            pages = pages_under(hid)
+            if not pages:
+                continue
+            node = hidraw_node(hid)
+            if node is None:
+                raise SystemExit(f"{hid.name} has no hidraw node")
+            matches.append((hid, node, min(pages)))
     if len(matches) == 1:
         return matches[0][1]
     if len(matches) > 1:
@@ -179,11 +203,13 @@ def explain(payload: bytes, reply: bytes) -> None:
 def main() -> int:
     import argparse
 
-    ap = argparse.ArgumentParser(description="replay the two captured identify commands to a 310a")
-    ap.add_argument("--path", help="sysfs device name from tools/inventory.py, when two 310a are attached")
+    ap = argparse.ArgumentParser(description="replay the two captured identify commands to the 2C")
+    ap.add_argument("--pid", default="310a", choices=["310a", "301b"], help="310a on USB (default), 301b over Bluetooth")
+    ap.add_argument("--path", help="sysfs device name from tools/inventory.py, when two are attached")
     args = ap.parse_args()
-    node = find_vendor_interface(CONTROLLER_PID, args.path)
-    print(f"open {node} for 2dc8:310a usage page 0x{USAGE_PAGE:04x}")
+    pid = int(args.pid, 16)
+    node = find_vendor_interface(pid, args.path)
+    print(f"open {node} for 2dc8:{pid:04x}")
     fd = os.open(node, os.O_RDWR)
     try:
         for payload in COMMANDS:

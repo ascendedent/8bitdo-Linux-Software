@@ -30,16 +30,44 @@ def fake_device(root: Path, name: str, pid: int, interfaces: list[tuple[bytes, i
             (hid / "hidraw" / f"hidraw{hidraw}").mkdir(parents=True)
 
 
+def fake_bluetooth(hid_root: Path, pid: int, instance: int, descriptor: bytes, hidraw: int | None) -> str:
+    """One Bluetooth HID device, as /sys/bus/hid/devices names it."""
+    name = f"0005:2DC8:{pid:04X}.{instance:04X}"
+    hid = hid_root / name
+    hid.mkdir(parents=True)
+    (hid / "report_descriptor").write_bytes(descriptor)
+    if hidraw is not None:
+        (hid / "hidraw" / f"hidraw{hidraw}").mkdir(parents=True)
+    return name
+
+
 class FindVendorInterfaceTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
-        self.root = Path(self.tmp.name)
-        self.saved = identify.SYSFS_ROOT
+        self.root = Path(self.tmp.name) / "usb"
+        self.root.mkdir()
+        self.hid_root = Path(self.tmp.name) / "hid"
+        self.hid_root.mkdir()
+        self.saved = (identify.SYSFS_ROOT, identify.HID_ROOT)
         identify.SYSFS_ROOT = self.root
+        identify.HID_ROOT = self.hid_root
 
     def tearDown(self) -> None:
-        identify.SYSFS_ROOT = self.saved
+        identify.SYSFS_ROOT, identify.HID_ROOT = self.saved
         self.tmp.cleanup()
+
+    def test_bluetooth_pad_is_found_under_the_hid_bus(self) -> None:
+        name = fake_bluetooth(self.hid_root, 0x301B, 7, VENDOR_PAGE_DESC, 12)
+        self.assertEqual(find_vendor_interface(0x301B), Path("/dev/hidraw12"))
+        self.assertEqual(find_vendor_interface(0x301B, name), Path("/dev/hidraw12"))
+        with self.assertRaises(SystemExit):
+            find_vendor_interface(0x310A)
+
+    def test_bluetooth_without_vendor_page_is_reported_not_opened(self) -> None:
+        fake_bluetooth(self.hid_root, 0x301B, 1, KEYBOARD_DESC, 12)
+        with self.assertRaises(SystemExit) as ctx:
+            find_vendor_interface(0x301B)
+        self.assertIn("301b at 0005:2DC8:301B.0001 (bluetooth)", str(ctx.exception))
 
     def test_picks_the_vendor_page_interface(self) -> None:
         fake_device(self.root, "3-5.2", 0x310A, [(KEYBOARD_DESC, 30), (VENDOR_PAGE_DESC, 31)])
