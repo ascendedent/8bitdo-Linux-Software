@@ -63,7 +63,16 @@ def allowed(packet: bytes) -> bool:
 
 class Session:
     def __init__(self, node: Path, log: Path, timeout_ms: int, *, fd: int | None = None) -> None:
-        self.fd = os.open(node, os.O_RDWR) if fd is None else fd
+        if fd is None:
+            try:
+                fd = os.open(node, os.O_RDWR)
+            except PermissionError as exc:
+                raise SystemExit(
+                    f"cannot open {node}: {exc.strerror}. Install udev/71-8bitdo.rules "
+                    "(see the README), replug the pad, and run again. Running as root also works "
+                    "but is not needed."
+                ) from exc
+        self.fd = fd
         self.log = open(log, "a")
         self.timeout = timeout_ms / 1000
         self.note(f"open {node}")
@@ -186,7 +195,9 @@ def main(argv: list[str] | None = None) -> int:
         args.skip = list(args.skip) + ["identify", "crc", "custom"]
         args.probes = False
     if args.log is None:
-        args.log = f"captures/exports/{args.pid}_{time.strftime('%Y%m%d_%H%M%S')}.txt"
+        # Under the repo's captures/exports/ whatever the working directory is.
+        exports = Path(__file__).resolve().parent.parent / "captures" / "exports"
+        args.log = str(exports / f"{args.pid}_{time.strftime('%Y%m%d_%H%M%S')}.txt")
     node = Path(args.node) if args.node else find_vendor_interface(pid, args.path)
     log = Path(args.log)
     log.parent.mkdir(parents=True, exist_ok=True)

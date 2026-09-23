@@ -118,6 +118,15 @@ class LoopbackRead(unittest.TestCase):
         self.assertEqual(fake.complaints, [])
         self.assertEqual(len(fake.requests), 3)
 
+    def test_permission_denied_points_at_the_udev_rule(self) -> None:
+        def denied(*a, **k):
+            raise PermissionError(13, "Permission denied")
+
+        with mock.patch.object(read_config.os, "open", denied):
+            with self.assertRaises(SystemExit) as ctx:
+                read_config.main(["--pid", "6012", "--node", "/dev/hidraw99", "--log", str(self.log)])
+        self.assertIn("udev/71-8bitdo.rules", str(ctx.exception))
+
     def test_first_chunk_matches_the_dll_shape(self) -> None:
         first = packets.pro2_read_chunk(0, u2.ULTIMATE2_SIZE, checksum=True)
         self.assertEqual(first[:3], bytes([0x81, 0x3E, 0x04]))
