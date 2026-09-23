@@ -229,6 +229,25 @@ def parse_pro2_read_reply(reply: bytes, *, checksum: bool = False) -> bytes:
     return chunk
 
 
+def parse_write_ack(reply: bytes, request: int) -> None:
+    """Accept or reject the reply the DLL reads after a write chunk or the commit.
+
+    From the acknowledgement reader behind writeUltimate2 and its per-field
+    siblings (real body 0x1040de60): byte 0 is 0x02, byte 1 is 0x04, the
+    uint16 at offset 2 is 4, and the uint16 at offset 4 echoes the request,
+    1 after a write chunk and 6 after the commit. Nothing else is checked.
+    Raises ValueError on anything else. No tool in this repo sends writes.
+    """
+    if len(reply) != 64:
+        raise ValueError(f"reply is {len(reply)} bytes, the read is 64")
+    if reply[0] != 0x02 or reply[1] != 0x04:
+        raise ValueError(f"reply starts {reply[0]:02x} {reply[1]:02x}")
+    echoed = int.from_bytes(reply[2:4], "little")
+    got = int.from_bytes(reply[4:6], "little")
+    if echoed != 0x0004 or got != request:
+        raise ValueError(f"reply words {echoed:#x} {got:#x}, wanted 0x4 {request:#x}")
+
+
 def custom_info_requests() -> list[bytes]:
     """The outbound chunks for one full read, offsets 0, 45, 90, ... 
 

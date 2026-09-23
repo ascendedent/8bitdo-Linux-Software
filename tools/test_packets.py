@@ -231,5 +231,24 @@ class ReadReplyCrc(unittest.TestCase):
             packets.parse_pro2_read_reply(bad, checksum=True)
 
 
+class WriteAck(unittest.TestCase):
+    def ack(self, request: int) -> bytes:
+        reply = bytearray(64)
+        reply[0:2] = b"\x02\x04"
+        reply[2:4] = (4).to_bytes(2, "little")
+        reply[4:6] = request.to_bytes(2, "little")
+        return bytes(reply)
+
+    def test_ack_echoes_the_request(self) -> None:
+        packets.parse_write_ack(self.ack(packets.PRO2_WRITE), packets.PRO2_WRITE)
+        packets.parse_write_ack(self.ack(packets.PRO2_COMMIT), packets.PRO2_COMMIT)
+        with self.assertRaises(ValueError):
+            packets.parse_write_ack(self.ack(packets.PRO2_WRITE), packets.PRO2_COMMIT)
+        with self.assertRaises(ValueError):
+            packets.parse_write_ack(bytes(64), packets.PRO2_WRITE)
+        with self.assertRaises(ValueError):
+            packets.parse_write_ack(self.ack(packets.PRO2_WRITE)[:63], packets.PRO2_WRITE)
+
+
 if __name__ == "__main__":
     unittest.main()
