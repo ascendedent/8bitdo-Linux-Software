@@ -1,6 +1,6 @@
-# Ultimate 2C config protocol
+# 8BitDo Linux Software
 
-What Ultimate Software V2 actually sends to an 8BitDo Ultimate 2C Wireless, and what it does not.
+Toward a Linux tool that configures 8BitDo pads the way Ultimate Software does on Windows. So far: what Ultimate Software V2 actually sends to an 8BitDo Ultimate 2C Wireless, what the 2C's firmware answers, and read-only tools that also cover the Ultimate 2 Wireless, which is the first pad with a real config channel. Nothing here writes to a pad yet; `tools/u2_plan.py` shows what a write would be without sending it.
 
 On 2026-09-23, V2 1.35 identified the controller and offered firmware. It did not read or write stick deadzones, trigger ranges, vibration, button maps, macros, or profiles. Those editors exist in this build for the Ultimate 2. The 2C has a product name and no profile data. L4 and R4 on this pad are the onboard Mapping button.
 
@@ -55,7 +55,7 @@ What the tools do and do not do:
 Steps:
 
 ```
-git clone https://github.com/ascendedent/ultimate-2c
+git clone https://github.com/ascendedent/8bitdo-Linux-Software
 cd ultimate-2c
 sudo cp udev/71-8bitdo.rules /etc/udev/rules.d/ && sudo udevadm control --reload-rules && sudo udevadm trigger
 # unplug and replug the pad (USB cable, DInput mode, so it shows up as 6012)
@@ -86,7 +86,8 @@ If you also have a Windows machine or Wine with Ultimate Software V2, the second
 | `tools/identify.py` | Replays the two captured identify commands to `310a` only and decodes the reply. |
 | `tools/read_config.py` | Allowlisted reads. On the 2C: identify, `--probes`, `readCRC`; the two chunked reads it ignores are behind `--unanswered`. On an Ultimate 2 (`--pid 6012`): the config read V2 sends on connect, saved as an image. |
 | `tools/u2_summary.py` | Decodes a 1592-byte Ultimate 2 image into fields. No HID device. |
-| `tools/test_read_config.py`, `tools/test_identify.py`, `tools/test_u2_summary.py` | The allowlist, the identify decoder, and the image summary. No HID device. |
+| `tools/u2_plan.py` | Plans one Ultimate 2 setting change the way V2 writes it and prints the packets. Sends nothing. |
+| `tools/test_*.py` | The allowlist, device selection against a fake sysfs, the identify decoder, the image summary, and the planner. No HID device. Run with `cd tools && python3 -m unittest`; CI runs the same. |
 | `docs/call-for-testers.md` | The post asking Ultimate 2 owners for a read. |
 | `tools/packets.py` | Builds the identify commands, the `custom_info` reads, and the Ultimate 2 write and commit. Does not send them. |
 | `tools/ultimate2_image.py` | Offsets of the stick, trigger, vibration, and other records in the 1592-byte image. |

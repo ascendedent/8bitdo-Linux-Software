@@ -18,6 +18,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import ultimate2_image as u2  # noqa: E402
+from packets import crc16_modbus  # noqa: E402
 
 PROFILES = 3
 MARKS = {u2.ENABLE_MARK: "enabled", u2.DISABLED_MARK: "not enabled"}
@@ -59,6 +60,16 @@ def summarize(image: bytes) -> list[str]:
     crc, mode, slot = struct.unpack_from("<IHH", image, 12)
     out.append("header flags: " + ", ".join(mark(f) for f in flags))
     out.append(f"crc_value {crc:#010x}, gamepad_mode {mode}, cur_slot {slot}")
+    # V2 stores ANSI_CRC_16_Ultimate2(image), a CRC-16/MODBUS over all 1592
+    # bytes as they were read, into crc_value. Which range the pad itself
+    # checks is unknown, so print the candidates for the first real image.
+    zeroed = bytearray(image)
+    zeroed[12:16] = bytes(4)
+    out.append(
+        "crc16 candidates: whole image as stored "
+        f"{crc16_modbus(image):#06x}, crc_value zeroed {crc16_modbus(bytes(zeroed)):#06x}, "
+        f"bytes 16 on {crc16_modbus(image[16:]):#06x}"
+    )
     for p in range(PROFILES):
         out.append(f"profile {p}: name {profile_name(image, p)!r}")
         for name in ("vibration", "stick", "trigger", "special", "x_rumble", "sixaxis"):

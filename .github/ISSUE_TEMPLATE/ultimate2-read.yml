@@ -1,0 +1,43 @@
+name: Ultimate 2 read result
+description: Send the output of a read from an 8BitDo Ultimate 2 Wireless (or another pad the tool opened).
+title: "Ultimate 2 read: <your pad and connection>"
+labels: ["tester-read"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks. Steps and what the files contain are in the README under "Help wanted".
+        The image carries your profile names and settings; the USB serial is never printed. Leave out anything you would rather not share and say so.
+  - type: input
+    id: device
+    attributes:
+      label: Pad and connection
+      description: Model, cable or dongle, and the product id inventory.py printed (6012, 310b, 6013, ...).
+      placeholder: Ultimate 2 Wireless, USB cable, 2dc8:6012
+    validations:
+      required: true
+  - type: textarea
+    id: inventory
+    attributes:
+      label: tools/inventory.py output
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: summary
+    attributes:
+      label: read_config.py --summary output
+      description: The decoded fields the tool printed after a complete read, or the last lines if the read did not complete.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Transcript and image
+      description: Attach the transcript (.txt) and the image (_u2.bin) from captures/exports/ by dragging them here, or say if you are keeping them.
+  - type: input
+    id: settings
+    attributes:
+      label: What the pad currently has set
+      description: Anything you changed in Ultimate Software (a dead zone, a bind, a profile name) so the decoded fields can be checked against it.

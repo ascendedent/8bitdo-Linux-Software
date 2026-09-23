@@ -1,0 +1,23 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  unittest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Unit tests (no HID device is opened)
+        working-directory: tools
+        run: python3 -m unittest -v
+      - name: Tools import and show help
+        run: |
+          python3 tools/read_config.py --help
+          python3 tools/identify.py --help
+          python3 tools/u2_summary.py || true
+          python3 tools/u2_plan.py --help

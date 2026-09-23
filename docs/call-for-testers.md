@@ -6,7 +6,7 @@ Post text for r/8bitdo (or r/linux_gaming). Update the link if the repo moves.
 
 **Title:** Linux + 8BitDo Ultimate 2 Wireless owners: 10 minutes to help build an open config tool (read-only, nothing gets written to your pad)
 
-I've been reverse-engineering how 8BitDo's Ultimate Software talks to its pads, with the goal of a Linux tool that can do what the Windows app does (dead zones, trigger ranges, L4/R4 binds, profiles). Everything so far is in the open here: https://github.com/ascendedent/ultimate-2c
+I've been reverse-engineering how 8BitDo's Ultimate Software talks to its pads, with the goal of a Linux tool that can do what the Windows app does (dead zones, trigger ranges, L4/R4 binds, profiles). Everything so far is in the open here: https://github.com/ascendedent/8bitdo-Linux-Software
 
 Where it stands: I own an Ultimate 2C, and it turns out the 2C has **no** host-side config channel at all. I pulled its firmware from 8BitDo's update server and disassembled it: the only commands it answers over USB are the firmware updater, identify, rumble, and a radio-address get/set. The L4/R4 binds are stored in a 26-byte flash record that only the on-pad button combo can change. The dongle doesn't relay anything to the pad either. So the 2C is a dead end for a config tool, by design.
 
@@ -14,7 +14,7 @@ The **Ultimate 2 Wireless** (the one with the charging dock, `2dc8:6012`) is dif
 
 If you have an Ultimate 2 and a Linux box, this is what I'm asking:
 
-1. `git clone https://github.com/ascendedent/ultimate-2c`, install the one udev rule from the README.
+1. `git clone https://github.com/ascendedent/8bitdo-Linux-Software`, install the one udev rule from the README.
 2. Plug the pad in on a cable in DInput mode.
 3. Run `python3 tools/inventory.py` (walks sysfs, sends nothing) and `python3 tools/read_config.py --pid 6012 --summary`.
 4. Open an issue with the three output files.

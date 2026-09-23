@@ -41,6 +41,9 @@ PAD_PIDS = {
 
 from packets import IDENTIFY_COMMANDS, IDENTIFY_GET_PID, IDENTIFY_INIT, pad_report
 
+# Overridden by the tests, which build a fake tree.
+SYSFS_ROOT = Path("/sys/bus/usb/devices")
+
 # Exact payloads from captures/exports/00_baseline.txt. pad_report extends
 # each one to the 64-byte interrupt transfer V2 used.
 COMMANDS = IDENTIFY_COMMANDS
@@ -52,7 +55,11 @@ def vendor_pages(usb_name: str, interface: int) -> set[int]:
     hidapi on this machine reports usage_page 0, so read the sysfs descriptor.
     A two-byte Usage Page item is 06 lo hi; a vendor page has hi = ff.
     """
-    iface = Path(f"/sys/bus/usb/devices/{usb_name}:1.{interface}")
+    return pages_under(SYSFS_ROOT / f"{usb_name}:1.{interface}")
+
+
+def pages_under(iface: Path) -> set[int]:
+    """Vendor usage pages declared by the report descriptors below one interface directory."""
     pages: set[int] = set()
     for desc in iface.rglob("report_descriptor"):
         data = desc.read_bytes()
@@ -83,7 +90,7 @@ def find_vendor_interface(pid: int = CONTROLLER_PID, path: str | None = None) ->
     """
     if pid not in PAD_PIDS:
         raise SystemExit(f"{pid:04x} is not a pad this tool opens")
-    root = Path("/sys/bus/usb/devices")
+    root = SYSFS_ROOT
     present = []
     matches: list[tuple[Path, Path, int]] = []
     if not root.is_dir():
@@ -100,7 +107,7 @@ def find_vendor_interface(pid: int = CONTROLLER_PID, path: str | None = None) ->
             continue
         for iface in sorted(dev.glob(f"{dev.name}:1.*")):
             number = int(iface.name.rsplit(".", 1)[-1])
-            pages = vendor_pages(dev.name, number)
+            pages = pages_under(iface)
             if not pages:
                 continue
             node = hidraw_node(iface)

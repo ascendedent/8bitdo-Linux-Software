@@ -31,11 +31,12 @@ class SummaryTests(unittest.TestCase):
         lines = summarize(synthetic())
         self.assertEqual(lines[0], "header flags: enabled, not enabled, not enabled")
         self.assertEqual(lines[1], "crc_value 0x00001234, gamepad_mode 1, cur_slot 2")
-        self.assertEqual(lines[2], "profile 0: name 'Racing'")
+        self.assertTrue(lines[2].startswith("crc16 candidates: whole image as stored 0x"))
+        self.assertEqual(lines[3], "profile 0: name 'Racing'")
         stick = next(line for line in lines if line.strip().startswith("stick"))
         self.assertIn("enabled", stick)
         self.assertIn("05 78 00 80", stick)
-        p0_map = next(line for line in lines[2:] if line.strip().startswith("map"))
+        p0_map = next(line for line in lines[3:] if line.strip().startswith("map"))
         self.assertIn("P1->A", p0_map)
 
     def test_map_entry_names(self) -> None:
