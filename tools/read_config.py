@@ -62,8 +62,8 @@ def allowed(packet: bytes) -> bool:
 
 
 class Session:
-    def __init__(self, node: Path, log: Path, timeout_ms: int) -> None:
-        self.fd = os.open(node, os.O_RDWR)
+    def __init__(self, node: Path, log: Path, timeout_ms: int, *, fd: int | None = None) -> None:
+        self.fd = os.open(node, os.O_RDWR) if fd is None else fd
         self.log = open(log, "a")
         self.timeout = timeout_ms / 1000
         self.note(f"open {node}")
@@ -106,7 +106,11 @@ def chunked_read(sess: Session, label: str, total: int, build, parse, out: Path,
     offset = 0
     stalls = 0
     tries = 0
-    while offset < total and tries < 30:
+    # Enough sends for every chunk plus the stall allowance. The Ultimate 2
+    # image needs 36 chunks of 45 bytes, so the custom_info cap of 30
+    # would stop it short.
+    max_tries = (total + packets.CUSTOM_INFO_CHUNK - 1) // packets.CUSTOM_INFO_CHUNK + 30
+    while offset < total and tries < max_tries:
         tries += 1
         reply = sess.exchange(build(offset), f"{label}@{offset:#x}")
         try:
@@ -139,7 +143,7 @@ def chunked_read(sess: Session, label: str, total: int, build, parse, out: Path,
         sess.note(f"    {label}: nothing readable")
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument(
         "--pid",
@@ -149,6 +153,11 @@ def main() -> int:
         "commands are not sent and the chunked config read is.",
     )
     ap.add_argument("--path", help="sysfs device name from tools/inventory.py, when two match")
+    ap.add_argument(
+        "--node",
+        help="open this hidraw node directly instead of finding it through sysfs. "
+        "The bootloader and idle-dongle refusals do not apply; for tests and for a device sysfs cannot describe.",
+    )
     ap.add_argument("--log", default=None, help="transcript path (default captures/exports/<pid>_<time>.txt)")
     ap.add_argument("--timeout-ms", type=int, default=800)
     ap.add_argument("--summary", action="store_true", help="after a complete Ultimate 2 read, print the decoded fields")
@@ -165,7 +174,7 @@ def main() -> int:
         help="also send the Ultimate 2 chunked read and the custom_info read, "
         "which firmware 1.09 does not answer",
     )
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
     pid = int(args.pid, 16)
     is_2c = pid == 0x310A
     if is_2c and not args.unanswered:
@@ -178,7 +187,7 @@ def main() -> int:
         args.probes = False
     if args.log is None:
         args.log = f"captures/exports/{args.pid}_{time.strftime('%Y%m%d_%H%M%S')}.txt"
-    node = find_vendor_interface(pid, args.path)
+    node = Path(args.node) if args.node else find_vendor_interface(pid, args.path)
     log = Path(args.log)
     log.parent.mkdir(parents=True, exist_ok=True)
     sess = Session(node, log, args.timeout_ms)
