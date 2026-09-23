@@ -63,7 +63,7 @@ python3 tools/inventory.py | tee inventory.txt
 python3 tools/read_config.py --pid 6012 --summary
 ```
 
-If `inventory.py` shows the pad as `310b` or `6013` instead, run the read with that `--pid`. If it shows more than one matching device, add `--path <name>` with the sysfs name it printed. The read writes a transcript and, on success, a 1592-byte `..._u2.bin` under `captures/exports/`.
+If `inventory.py` shows the pad as `310b` or `6013` instead, run the read with that `--pid`. If it shows more than one matching device, add `--path <name>` with the sysfs name it printed. If the read tool says it found no interface with a vendor usage page, look at the inventory for the hidraw node whose report ids include `0x81` and `0x02` and pass it directly with `--node /dev/hidrawN`; that is the one V2 talks to. The read writes a transcript and, on success, a 1592-byte `..._u2.bin` under `captures/exports/`.
 
 What to send back, as a GitHub issue or a pull request: `inventory.txt`, the transcript, and the `.bin`. Before you do, look at the `--summary` output: the image carries your three profile names and whatever you set in V2, and the transcript carries the pad's descriptors. The pad's USB serial is never printed. If any of that is private, say so and send just the summary.
 

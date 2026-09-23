@@ -14,6 +14,8 @@ CAPTURED = bytes.fromhex("02226d0000001b30010000") + bytes(53)
 
 VENDOR_PAGE_DESC = bytes.fromhex("067aff0901a101" "8502090215002 5ff7508953f8102" "858109059102c0c0".replace(" ", ""))
 KEYBOARD_DESC = bytes.fromhex("05010906a101c0")
+# A vendor page with other report ids, like an XInput-style vendor collection.
+OTHER_VENDOR_DESC = bytes.fromhex("0600ff0901a101" "8501090275089540 8102" "c0".replace(" ", ""))
 
 
 def fake_device(root: Path, name: str, pid: int, interfaces: list[tuple[bytes, int | None]]) -> None:
@@ -98,10 +100,19 @@ class FindVendorInterfaceTests(unittest.TestCase):
         with self.assertRaises(SystemExit):
             find_vendor_interface(0x310A, "3-9")
 
-    def test_no_vendor_page_is_not_opened(self) -> None:
+    def test_no_vendor_page_is_not_opened_and_nodes_are_named(self) -> None:
         fake_device(self.root, "1-1", 0x6012, [(KEYBOARD_DESC, 5)])
-        with self.assertRaises(SystemExit):
+        with self.assertRaises(SystemExit) as ctx:
             find_vendor_interface(0x6012)
+        self.assertIn("/dev/hidraw5", str(ctx.exception))
+        self.assertIn("--node", str(ctx.exception))
+
+    def test_config_report_ids_win_over_another_vendor_page(self) -> None:
+        fake_device(self.root, "1-1", 0x6012, [(OTHER_VENDOR_DESC, 3), (VENDOR_PAGE_DESC, 4)])
+        self.assertEqual(find_vendor_interface(0x6012), Path("/dev/hidraw4"))
+        fake_device(self.root, "1-2", 0x310B, [(OTHER_VENDOR_DESC, 8)])
+        # With no better candidate the other vendor page is still opened.
+        self.assertEqual(find_vendor_interface(0x310B), Path("/dev/hidraw8"))
 
 
 class DescribeIdentifyTests(unittest.TestCase):

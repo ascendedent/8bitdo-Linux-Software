@@ -65,13 +65,30 @@ def vendor_pages(usb_name: str, interface: int) -> set[int]:
 
 def pages_under(iface: Path) -> set[int]:
     """Vendor usage pages declared by the report descriptors below one interface directory."""
+    return descriptor_facts(iface)[0]
+
+
+def descriptor_facts(iface: Path) -> tuple[set[int], set[int]]:
+    """(vendor usage pages, report ids) from the report descriptors below one interface.
+
+    A two-byte Usage Page item is 06 lo hi with hi = ff for a vendor page.
+    A one-byte Report ID item is 85 id. Both scans are over raw bytes, so a
+    value byte that happens to equal 06 or 85 can add a false entry; that
+    only widens the candidate set, it never drops the real one.
+    """
     pages: set[int] = set()
+    ids: set[int] = set()
     for desc in iface.rglob("report_descriptor"):
         data = desc.read_bytes()
-        for i in range(len(data) - 2):
-            if data[i] == 0x06 and data[i + 2] == 0xFF:
+        for i in range(len(data) - 1):
+            if data[i] == 0x85:
+                ids.add(data[i + 1])
+            if data[i] == 0x06 and i + 2 < len(data) and data[i + 2] == 0xFF:
                 pages.add(0xFF00 | data[i + 1])
-    return pages
+    return pages, ids
+
+
+CONFIG_REPORT_IDS = {0x81, 0x02}
 
 
 def descriptor_has_vendor_page(usb_name: str, interface: int) -> bool:
@@ -110,16 +127,20 @@ def find_vendor_interface(pid: int = CONTROLLER_PID, path: str | None = None) ->
             continue
         if path is not None and dev.name != path:
             continue
+        candidates: list[tuple[int, int, Path]] = []
         for iface in sorted(dev.glob(f"{dev.name}:1.*")):
             number = int(iface.name.rsplit(".", 1)[-1])
-            pages = pages_under(iface)
+            pages, ids = descriptor_facts(iface)
             if not pages:
                 continue
             node = hidraw_node(iface)
             if node is None:
                 raise SystemExit(f"{dev.name} interface {number} has no hidraw node")
-            matches.append((dev, node, min(pages)))
-            break
+            # The config channel declares output 81 and input 02; prefer it.
+            candidates.append((0 if CONFIG_REPORT_IDS <= ids else 1, min(pages), node))
+        if candidates:
+            candidates.sort()
+            matches.append((dev, candidates[0][2], candidates[0][1]))
     # Bluetooth: one HID device per pad, no USB interface directories.
     if HID_ROOT.is_dir():
         for hid in sorted(HID_ROOT.iterdir()):
@@ -144,11 +165,24 @@ def find_vendor_interface(pid: int = CONTROLLER_PID, path: str | None = None) ->
     if len(matches) > 1:
         names = ", ".join(f"{d.name} ({n}, page 0x{p:04x})" for d, n, p in matches)
         raise SystemExit(f"more than one {pid:04x} with a vendor page: {names}. Pass --path.")
+    nodes = []
+    for dev in sorted(root.iterdir()) if root.is_dir() else []:
+        if (dev / "idProduct").is_file() and int((dev / "idProduct").read_text().strip(), 16) == pid:
+            for iface in sorted(dev.glob(f"{dev.name}:1.*")):
+                node = hidraw_node(iface)
+                if node is not None:
+                    nodes.append(str(node))
     raise SystemExit(
         f"no {pid:04x} interface with a vendor usage page"
         + (f" at {path}" if path else "")
         + f". present: {', '.join(present) or 'none'}. "
         "The idle dongle (301c) is not a substitute."
+        + (
+            f" This {pid:04x} has hidraw nodes without a vendor page: {', '.join(nodes)}. "
+            "If tools/inventory.py shows report ids 0x81 and 0x02 on one of them, pass it with --node."
+            if nodes
+            else ""
+        )
     )
 
 
