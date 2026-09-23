@@ -201,12 +201,14 @@ def parse_custom_info_reply(reply: bytes) -> bytes:
     return bytes(reply[0x12:end])
 
 
-def parse_pro2_read_reply(reply: bytes) -> bytes:
-    """Chunk from the flag-set reply parser.
+def parse_pro2_read_reply(reply: bytes, *, checksum: bool = False) -> bytes:
+    """Chunk from a request-2 read reply, as the DLL's parser takes it.
 
     Byte 0 is 0x02, byte 1 is 0x04, the uint16 at offset 2 is 4, and the
-    uint16 at offset 4 is the request type 2. The chunk length is the
-    dword at offset 6. The chunk starts at offset 0x12.
+    uint16 at offset 4 is the request type 2. The dword at offset 6 is the
+    chunk length in its low 16 bits; on a CRC product (CRC_PIDS) the high
+    16 bits carry the pad's CRC-16 of the chunk and the DLL rejects the
+    reply when it does not match. The chunk starts at offset 0x12.
     """
     if len(reply) != 64:
         raise ValueError(f"reply is {len(reply)} bytes, the read is 64")
@@ -216,11 +218,15 @@ def parse_pro2_read_reply(reply: bytes) -> bytes:
     request = int.from_bytes(reply[4:6], "little")
     if echoed != 0x0004 or request != PRO2_READ:
         raise ValueError(f"reply words {echoed:#x} {request:#x}")
-    length = int.from_bytes(reply[6:10], "little")
+    word = int.from_bytes(reply[6:10], "little")
+    length, crc = word & 0xFFFF, word >> 16
     end = 0x12 + length
     if length > CUSTOM_INFO_CHUNK or end > len(reply):
         raise ValueError(f"chunk length {length} does not fit")
-    return bytes(reply[0x12:end])
+    chunk = bytes(reply[0x12:end])
+    if checksum and crc != crc16_modbus(chunk):
+        raise ValueError(f"chunk crc {crc:#06x} is not {crc16_modbus(chunk):#06x}")
+    return chunk
 
 
 def custom_info_requests() -> list[bytes]:

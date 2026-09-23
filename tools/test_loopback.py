@@ -68,7 +68,9 @@ class FakeUltimate2(threading.Thread):
             reply[0:2] = bytes([0x02, 0x04])
             reply[2:4] = (4).to_bytes(2, "little")
             reply[4:6] = packets.PRO2_READ.to_bytes(2, "little")
-            reply[6:10] = length.to_bytes(4, "little")
+            # A CRC product answers with its own CRC-16 of the chunk in the high half.
+            chunk = self.image[offset : offset + length]
+            reply[6:10] = (length | packets.crc16_modbus(chunk) << 16).to_bytes(4, "little")
             reply[0x12 : 0x12 + length] = self.image[offset : offset + length]
             os.write(self.fd, bytes(reply))
 

@@ -73,6 +73,8 @@ That path clamps each chunk to 45 bytes (`0x2d`) and wraps it with the same thre
 | 15–16 | `00 00` | Offset, little endian. Later chunks advance it |
 | 4–10, 12, 17–18 | `CC` | Not stored. This build fills the stack frame with `CC` before writing the fields above |
 
+The request-2 replies go through a different parser (real body at `0x1040d6a0` behind the `0x103caf47` thunk): byte 0 `02`, byte 1 `04`, uint16 `4` at offset 2, uint16 request `2` at offset 4, then the dword at offset 6 is the chunk length **in its low 16 bits**; on the CRC products (`6006`, `3010`, `3011`, `6007`, `3109`, `6009`, `6012`, `600f`, `600b`, `2062`) the high 16 bits are the pad's CRC-16 of the chunk and the parser rejects a mismatch. Data starts at `0x12`. `tools/packets.py` does the same, and `read_config.py` turns the check on for those ids; before 2026-09-23 it read the whole dword as the length, which would have rejected every chunk from a real Ultimate 2.
+
 The reply parser accepts a 64-byte read only when byte 0 is `02`, byte 1 is `04`, byte 2 is `04`, and the dword at offset 6 is `0x0c`. The chunk length is byte 10. The chunk bytes start at offset `0x12`. The reader writes that chunk at the current offset, adds the length to the offset, and tries again, up to 30 times, until the offset reaches `0x230`. A rejected reply or a zero length does not move the offset. It then copies the first 560 bytes out. `assemble_custom_info` in `tools/packets.py` does that join.
 
 If that BSS flag were 1, the same wrapper would be used with a Pro 2 body. The first chunk is:

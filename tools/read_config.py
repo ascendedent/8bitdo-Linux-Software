@@ -204,7 +204,8 @@ def main(argv: list[str] | None = None) -> int:
                 lambda off: packets.pad_report(
                     packets.pro2_read_chunk(off, packets.ULTIMATE2_TOTAL, checksum=pid in packets.CRC_PIDS)
                 ),
-                packets.parse_pro2_read_reply, log.with_name(log.stem + "_u2.bin"), args.summary,
+                lambda reply: packets.parse_pro2_read_reply(reply, checksum=pid in packets.CRC_PIDS),
+                log.with_name(log.stem + "_u2.bin"), args.summary,
             )
         if "custom" not in args.skip:
             chunked_read(

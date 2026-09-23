@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import unittest
 
+import packets
+
 from packets import (
     CUSTOM_INFO_CHUNK,
     CUSTOM_INFO_TOTAL,
@@ -206,6 +208,27 @@ class PacketTests(unittest.TestCase):
             custom_info_chunk(CUSTOM_INFO_TOTAL + 1)
         with self.assertRaises(ValueError):
             custom_info_chunk(-1)
+
+
+class ReadReplyCrc(unittest.TestCase):
+    def reply(self, chunk: bytes, crc: int) -> bytes:
+        reply = bytearray(64)
+        reply[0:2] = b"\x02\x04"
+        reply[2:4] = (4).to_bytes(2, "little")
+        reply[4:6] = packets.PRO2_READ.to_bytes(2, "little")
+        reply[6:10] = (len(chunk) | crc << 16).to_bytes(4, "little")
+        reply[0x12 : 0x12 + len(chunk)] = chunk
+        return bytes(reply)
+
+    def test_length_is_the_low_half_and_crc_is_checked_for_crc_products(self) -> None:
+        chunk = bytes(range(45))
+        good = self.reply(chunk, packets.crc16_modbus(chunk))
+        self.assertEqual(packets.parse_pro2_read_reply(good), chunk)
+        self.assertEqual(packets.parse_pro2_read_reply(good, checksum=True), chunk)
+        bad = self.reply(chunk, 0x1234)
+        self.assertEqual(packets.parse_pro2_read_reply(bad), chunk)
+        with self.assertRaises(ValueError):
+            packets.parse_pro2_read_reply(bad, checksum=True)
 
 
 if __name__ == "__main__":
