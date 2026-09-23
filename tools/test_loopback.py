@@ -41,7 +41,9 @@ class FakeUltimate2(threading.Thread):
             if not packet:
                 return
             self.requests.append(packet)
-            if packet[:3] != bytes([0x81, 0x3E, 0x04]):
+            # Report 81, a size byte that follows the chunk (3e for 45 bytes,
+            # 22 for the 17-byte tail of a 1592-byte image), section 04.
+            if packet[0] != 0x81 or packet[2] != 0x04 or packet[1] != 17 + (packet[7] | packet[8] << 8):
                 self.complaints.append(f"not a section-04 read: {packet[:4].hex()}")
                 continue
             body = packet[3:]
