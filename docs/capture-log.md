@@ -65,13 +65,25 @@ The dongle's firmware was updated with V2 on 2026-09-23 (afternoon). `tools/inve
 - `3-5.1`: `301c` `IDLE`, bcdDevice `2.00`, one HID interface, 42-byte descriptor on page `0xffa0` with reports `02` and `81`. Same bcdDevice as before the update, and the descriptor is byte for byte the `0xFFA0` descriptor in the adapter 1.03 image.
 - `3-5.2.2.2`: `310a` on the cable, bcdDevice `1.14`, the same three interfaces as `docs/cable-inventory.md`.
 
-Everything about the receiver that was captured before the update still matches from the outside. What the update changed can only be seen by talking to it, so these are the retests, all through the dongle with the pad on (the dongle then enumerates as `310a`; the tools never open the idle `301c`):
+Everything about the receiver that was captured before the update still matches from the outside. What the update changed is answered by `06` and `07` below: the receiver is on 1.03, the image `docs/firmware.md` analyses.
 
-1. `tools/inventory.py` with the pad linked, to confirm the dongle presents `310a` with the same three interfaces as the cable.
-2. `tools/identify.py --path <dongle sysfs name>` (or `tools/read_config.py --path ... --probes --skip crc`). Per `docs/firmware.md` the receiver answers identify itself: expect version byte `0x67` if it is now on 1.03 and product id `1c 30`, not the pad's `1b 30`. A different version byte means the server has a newer receiver build than the one in `vendor/firmware/`, in which case fetch it (`docs/firmware.md`, type 76) and re-run the adapter disassembly.
-3. The `02_idle_dongle` observation (V2 sends nothing to `301c`) does not need repeating; it is about V2, not the dongle.
+## `06_inventory_dongle_linked`: read-only, 2026-09-23 13:10
 
-`--path` exists because the cable and the dongle can both be attached as `310a` at once; the tools refuse to guess.
+Cable unplugged, pad powered on wirelessly. The dongle at `3-5.1` re-enumerated as `310a`, bcdDevice `1.14`, product string `8BitDo Ultimate 2C Wireless Controller`, with the same three interfaces as the cable (XInput, 166-byte keyboard/consumer/mouse HID, 33-byte page `0xFF7A` HID). Saved to `captures/exports/06_inventory_dongle_linked.txt`. That is the `310a` personality inside the adapter image, not the pad.
+
+## `07_dongle_probes`: identify and the three probes through the dongle, 2026-09-23 13:12
+
+Same tool and packets as `04_probes`, `--path 3-5.1`. Every reply is the receiver's, as `docs/firmware.md` predicted from the adapter image; nothing reached the pad.
+
+| Sent | Reply through the dongle | Reply on the cable (`04_probes`) |
+| --- | --- | --- |
+| `81 05 00 21 01` | `02 22 67 00 00 00 1c 30 00 00` | `02 22 6d 00 00 00 1b 30 01 00` |
+| `81 05 c1 00` | `02 05 00 00 c1 00`, zeros, then `00 10` at offset 30 | same frame, but `08 34 84 00 f0 33 84 00` at offset 22 |
+| `81 05 00 31 01` | `02 32` | `02 32` |
+| `81 00 66 aa 63` | `02 02 63`, five address bytes, `00 67 00 00 00` | `02 02 63`, five different address bytes, `00 6d 00 00 00` |
+| `81 05 08 00` | class-`05` frame, `1c 30` at offset 18 | same frame, `1b 30` at offset 18 |
+
+So the receiver runs firmware 1.03 (version byte `0x67`, matching the `u2c_adapter_1.03.dat` header), identifies as `301c`, has no product-string selector (bytes 8-9 zero), and reports its own 5-byte radio address, which differs from the one the pad reports on the cable. The two address bytes are redacted in the committed transcripts. The retest list above is closed: the dongle's report set is the one tabulated in `docs/firmware.md`, and a host on the dongle path is talking to the receiver.
 
 ## Wireshark filters
 

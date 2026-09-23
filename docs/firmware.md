@@ -137,7 +137,7 @@ Every OUT report reaches two dispatchers from the RAM-resident USB handler at of
 
 | Command uint16 | Debug string | Handler | What it does |
 | --- | --- | --- | --- |
-| `0x00c1` | `init_device`, `init.upgrade_addr : %x` | `0x71bc` | Init, builds the reply block. |
+| `0x00c1` | `init_device`, `init.upgrade_addr : %x` | `0x71bc` | Init, builds the reply block. Seen, `07_dongle_probes`: the same frame as the pad's but with zeros where the pad puts two RAM addresses. |
 | `0x0004` | `eraseFlash ----> header->cmd_params` | `0x7230` | Sector erase at the address in the header. |
 | `0x0003` | `writefirmware ----> header->cmd_params`, `crc != header` | `0x72e8` | Flash program with a CRC check against the header. Payload starts at report byte 18. |
 | `0x0002` | `writefirmware`, then `boot_wirteFlash ----> offset` | `0x7424` | Flash program of the boot block, same CRC check. |
@@ -147,7 +147,7 @@ Every OUT report reaches two dispatchers from the RAM-resident USB handler at of
 | `0x00c2` | `savehead4K ----> header->cmd_params` | `0x77e4` | Save-head step. |
 | `0x00c4` | `saveCodeBlock`, `info: %x - %x` | `0x7838` | Save-code-block step. |
 | `0x0007` | `reset ----> header->cmd_params` | `0x78dc` | Replies, then resets. |
-| `0x0008` | `get_pid` | `0x7940` | Reply only. The constant it plants is the product id `0x301c`. |
+| `0x0008` | `get_pid` | `0x7940` | Reply only. The constant it plants is the product id `0x301c`. Seen, `07_dongle_probes`: `1c 30` at offset 18. |
 
 **Device dispatcher (`0x81fc`).** Gated by the USB mode byte at RAM `0x843060`: when that byte is 2 or 3 every handler below runs, otherwise only `changeBoot_Dinput`. That byte is set to 2 by the XInput output report `01 03 nn` (the LED command every XInput host sends, handled at `0x7cd0` before the dispatchers run) and by the descriptor handler at `0x7ad4`-`0x7b02` when it serves the 42-byte or the 145-byte descriptor, so the full set is live once a host has claimed the device. Replies go through the same send helper (`0x7d7c`) as the updater, which also refuses to send unless the configured flag at `0x843061` is 2.
 
@@ -157,17 +157,17 @@ Every OUT report reaches two dispatchers from the RAM-resident USB handler at of
 | `81 05 00 38` | `CAL_JOY_SAVE ` | `0x7f08` | Replies a 63-byte report whose first byte is `0x39`. |
 | `81 05 00 51 00` | ` chanegBoot_Dinput - done ` | `0x7f74` | Clears bit 31 of the word at `0x800620`, clears it again in `0x7f50`, writes analog register `0x3c` = `0x5a`, then jumps to the RAM reset routine. This is a reboot into the other boot mode. |
 | `81 05 ?? 51 nn` | `changePlatformCMD : %d` | `0x80f0` | Logs `nn` (report byte 4) and returns. Byte 2 is not checked. Print only in 1.03. |
-| `81 05 00 21 01` | ` getVersion_Dinput - done ` | `0x7fb8` | Identify: reply `22`, version `67 00 00 00`, product id `1c 30`. Same shape as the pad's identify. |
-| `81 05 00 31 01` | ` get_is_wiredGamepad - done ` | `0x802c` | Replies with payload byte `0x32`. |
+| `81 05 00 21 01` | ` getVersion_Dinput - done ` | `0x7fb8` | Identify: reply `22`, version `67 00 00 00`, product id `1c 30`, then zeros (no string selector). Same shape as the pad's identify. Seen, `07_dongle_probes`. |
+| `81 05 00 31 01` | ` get_is_wiredGamepad - done ` | `0x802c` | Replies with payload byte `0x32`. Seen, `07_dongle_probes`. |
 | `81 11 04 08 dd dd ll rr` | `timer left_vibration : %x - %x - %x` | `0x8078` | Rumble: uint16 duration at bytes 5-6, left strength byte 7, right strength byte 8. Stores both, drives the motors through `0x6fac`, cancels any running stop timer and starts a new one. |
-| `81 ?? 66 aa 63` | `getRFAddressCMD ` | `0x8114` | Reply `02 63`, 5 bytes from RAM `0x843124`, then version `0x67`. |
+| `81 ?? 66 aa 63` | `getRFAddressCMD ` | `0x8114` | Reply `02 63`, 5 bytes from RAM `0x843124`, a zero, then version `0x67` as a uint32. After replying it waits 100 ms and stores request byte 1 into the RAM flag `0x842f14` (zeroed at boot, written nowhere else), so it is sent with byte 1 zero. Seen, `07_dongle_probes`. |
 | `81 ?? 66 aa 64 a0..a5` | `setRFAddressCMD: ` | `0x8188` | Passes the 6 bytes at report offset 5 to `0x6eb4`, replies `02 64` plus 5 bytes from RAM `0x84308c`. |
 
 `send_CAL_JOY: %d` and `usb_init`, `usb_stop`, `Flash_Erase_Config error` have no literal reference and are dead strings. The `81 ?? 66 aa 70` handler the pad has is not in the adapter.
 
 ## Over the radio
 
-Report `81` does not cross the 2.4 GHz link in either direction. The receiver's USB handler at `0x36e`-`0x4c4` copies each OUT packet from the endpoint FIFO into a stack buffer, hands it to the XInput rumble and LED parser (`0x7cd0`) and then to its own two dispatchers, and returns; no radio transmit is called from that path, and the only handlers that touch the radio are rumble (through the motor driver) and the RF address commands. On the pad, the dispatcher at `0x9828` has exactly two callers, `0x4a34` and `0x4a6e`, both inside the USB handler that reads the endpoint FIFOs at `0x80011e` and `0x80011d`; the 2.4 GHz receive path never reaches it. So through the dongle a host is talking to the receiver's firmware (identify answers `301c`, version `0x67`), and the pad's settings record is out of reach.
+Report `81` does not cross the 2.4 GHz link in either direction. The receiver's USB handler at `0x36e`-`0x4c4` copies each OUT packet from the endpoint FIFO into a stack buffer, hands it to the XInput rumble and LED parser (`0x7cd0`) and then to its own two dispatchers, and returns; no radio transmit is called from that path, and the only handlers that touch the radio are rumble (through the motor driver) and the RF address commands. On the pad, the dispatcher at `0x9828` has exactly two callers, `0x4a34` and `0x4a6e`, both inside the USB handler that reads the endpoint FIFOs at `0x80011e` and `0x80011d`; the 2.4 GHz receive path never reaches it. So through the dongle a host is talking to the receiver's firmware, and the pad's settings record is out of reach. Confirmed on the wire on 2026-09-23 (`07_dongle_probes` in `docs/capture-log.md`): through the dongle, identify answers version `0x67` and product id `1c 30`, `66 aa 63` returns a different radio address from the pad's, and `0008` plants `1c 30`; the same packets on the cable get the pad's `6d`, `1b 30`, and its own address.
 
 ## Where the pad keeps its settings (1.09)
 

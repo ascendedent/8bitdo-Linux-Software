@@ -35,7 +35,7 @@ The 1.09 image the pad is running was fetched from 8BitDo's update server and di
 
 - Report `81` has an updater (the class `05` commands V2's DLL names), identify, rumble, RF address get and set, a product-string selector, and nothing else. There is no settings read and no settings write.
 - The L4/R4 binds are four 32-bit button masks in a 26-byte record at flash `0x73000`, set only by the on-pad combo. No host command reads or writes them.
-- The receiver (`301c`) answers report `81` itself and never relays it to the pad, so the dongle is not a way in either.
+- The receiver (`301c`) answers report `81` itself and never relays it to the pad, so the dongle is not a way in either. Confirmed on the wire: through the dongle, identify returns the receiver's version and id, not the pad's.
 - Firmware 1.06 has the same command set. The Bluetooth 2C (`301a`) image is encrypted, and V2 1.35 routes that id to firmware-only as well.
 
 ## Still open

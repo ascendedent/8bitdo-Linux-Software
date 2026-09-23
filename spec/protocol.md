@@ -8,7 +8,7 @@ Observed 2026-09-23 over a USB cable, PID `310a`, bcdDevice `1.14`. Full writeup
 
 | Question | Answer |
 | --- | --- |
-| Works over the 2.4 GHz dongle? | With the controller on, the dongle is `310a` and V2 sends the same identify probe as on the cable. With the controller off, the dongle is `301c` and V2 sends nothing. Report `81` never reaches the pad through the dongle: the receiver firmware answers identify (with its own id `301c`), RF address, and rumble itself, and the pad's report handler is only reached from its USB endpoints (`docs/firmware.md`). |
+| Works over the 2.4 GHz dongle? | With the controller on, the dongle is `310a` and V2 sends the same identify probe as on the cable. With the controller off, the dongle is `301c` and V2 sends nothing. Report `81` never reaches the pad through the dongle: the receiver firmware answers identify (with its own id `301c`), RF address, and rumble itself, and the pad's report handler is only reached from its USB endpoints (`docs/firmware.md`). Confirmed 2026-09-23 (`07_dongle_probes`): through the dongle, identify returns version `67` and id `1c 30`; on the cable the same packet returns `6d` and `1b 30`. |
 | Works over USB cable? | V2 1.35 sends the identify probe on interface 2. It does not follow that with a config read or write. |
 | Works over Bluetooth? | Not tested. The machine's Bluetooth adapter is down until a reboot. Public reports say DirectInput is `2dc8:301b`, and the identify reply contains that ID. |
 | Transport | Interrupt OUT and interrupt IN on interface 2. Not a feature report. `hid-generic` owns the interface. |
