@@ -69,6 +69,13 @@ What to send back, as a GitHub issue or a pull request: `inventory.txt`, the tra
 
 If you also have a Windows machine or Wine with Ultimate Software V2, the second-most useful thing is a usbmon capture of V2 changing one setting (a stick dead zone, say) and saving; `docs/capture-log.md` has the Wireshark filters. That is optional.
 
+## Where this is going
+
+1. **Now:** read-only. Inventory, identify, and the probes on the 2C; the connect-time config read on an Ultimate 2. Every packet is allowlisted, and the tests pin the allowlist.
+2. **Next, once one real Ultimate 2 image arrives:** check `u2_summary.py` against what the owner actually set, and settle which byte range the pad's `crc_value` covers (the summary prints the candidates).
+3. **Then:** a send path for `u2_plan.py`, gated on that image matching. Per-field writes first (one chunk, commit), exactly as V2 does them, with a read-back to confirm. A full-image save last.
+4. **Not planned:** anything that talks to a bootloader id, and any write to the 2C. The 2C has nothing to write to, and the receiver's updater commands are the only writes it accepts.
+
 ## Layout
 
 | Path | What it is |
