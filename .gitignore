@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.venv/
+.wine/
+
+# Raw captures can contain the controller serial in USB descriptors.
+captures/*.pcap
+captures/*.pcapng
+captures/*.txt
+captures/*.bin
+backups/

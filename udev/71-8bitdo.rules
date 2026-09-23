@@ -1,0 +1,9 @@
+# User access to 8BitDo hidraw nodes so Ultimate Software V2 (Wine) and
+# this project's read-only tools can open the controller without root.
+#
+# Bootloader PIDs are excluded on purpose. Never give a userspace tool
+# a shorter path to firmware transfer.
+#   3208  shared 8BitDo bootloader called out in the field notes
+#   5750  older 8BitDo bootloader listed in public USB ID tables
+
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="2dc8", ATTRS{idProduct}!="3208", ATTRS{idProduct}!="5750", TAG+="uaccess"
