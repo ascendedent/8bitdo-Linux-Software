@@ -45,17 +45,18 @@ Not a V2 capture. `tools/read_config.py` sent read-only probes to the cable-conn
 
 The pad kept answering the identify commands after the ignored reads, and still enumerates as `310a`. The section-`04` config reads are ignored. The class-`05` firmware-updater commands are answered.
 
-## `04_probes`: three reply-only commands, pending
+## `04_probes`: three reply-only commands, 2026-09-23 13:05
 
-Authorized 2026-09-23 (afternoon), cable, `310a`. Each was checked in the 1.09 image first (`docs/firmware.md`): `81 05 00 31 01` only builds a reply with payload byte `0x32`; `81 00 66 aa 63` replies with the 5-byte radio address and version, then stores request byte 1 into a RAM mode flag, so byte 1 is sent as `00` to leave that flag at its boot value; class `05` command `0008` (`81 05 08 00`) fills a reply with `0x301b`. `tools/read_config.py --probes` sends exactly those 64-byte packets and refuses `66 aa 63` with any other byte 1, `66 aa 64`, `00 61 01`, `00 51 00`, `00 36`, and `00 38`.
+Authorized, cable, `310a` at `3-5.2.2.2`, `tools/read_config.py --probes --skip crc`. Each command was checked in the 1.09 image first (`docs/firmware.md`): `81 05 00 31 01` only builds a reply with payload byte `0x32`; `81 00 66 aa 63` replies with the 5-byte radio address and version, then stores request byte 1 into a RAM mode flag, so byte 1 was sent as `00` to leave that flag at its boot value; class `05` command `0008` (`81 05 08 00`) fills a reply with `0x301b`. The tool refuses `66 aa 63` with any other byte 1, `66 aa 64`, `00 61 01`, `00 51 00`, `00 36`, and `00 38`. Transcript in `captures/exports/04_probes.txt`, radio address redacted there; the raw copy is gitignored.
 
-The run itself was blocked by the agent's permission layer, so it has not happened yet. To run it:
+| Sent | Replies | Reply |
+| --- | --- | --- |
+| `81 05 00 21 01`, `81 05 c1 00` | 1 each | Identical to the baseline and to `03_reads`. |
+| `81 05 00 31 01` | 1 | `02 32`, rest zero. As predicted. |
+| `81 00 66 aa 63` | 1 | `02 02 63`, five address bytes, `00 6d 00 00 00`, rest zero. The version is stored as a uint32 at payload offset 8, so there is a zero byte between the address and `6d`; the prediction had them adjacent. |
+| `81 05 08 00` | 1 | `02 05 00 00 08 00 02 00 00 00 02 00`, then `1b 30` at offset 18. The class `05` reply frame: `02 05 00 00`, the command uint16, the header bytes from 4 on, and the 46-byte payload area from offset 18, the same frame `readCRC` used. |
 
-```
-python3 tools/read_config.py --probes --skip crc --timeout-ms 1000 --log captures/exports/04_probes.txt
-```
-
-Expected, from the image: `02 32 ...`; `02 63 a0 a1 a2 a3 a4 6d ...` (the radio address, which is an identifier for this pad, so redact it before committing the log); `02 05 00 00 08 00 02 00 02 00 00 00 1b 30`.
+The pad kept identifying afterwards. Three more handlers in the table are now confirmed against the wire, and the radio address the pad reports is a 5-byte value, matching the 5 bytes `66 aa 64` would write.
 
 ## `05_inventory_after_dongle_update`: read-only, 2026-09-23
 

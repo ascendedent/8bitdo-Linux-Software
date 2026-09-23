@@ -102,7 +102,7 @@ Every handler starts from the same OUT buffer. Byte 0 is the report id `0x81`. T
 | `0x00c1` | `initDevice1`. Builds the address block already in the capture, then replies. | yes, `81 05 c1 00` |
 | `0x00c3` | `readCRC`. CRC of the flash range named in the report. Region `(0, 0)` answered `0xffff`. | yes |
 | `0x0005` | Copies at most 46 bytes from a flash address into the reply. A firmware read, not a settings image. | no |
-| `0x0008` | Reply only. The constant it plants is the product id `0x301b`. No flash call. | no |
+| `0x0008` | Reply only. The constant it plants is the product id `0x301b`. No flash call. | yes, `04_probes`: `02 05 00 00 08 00 02 00 00 00 02 00`, `1b 30` at offset 18 |
 | `0x00c2` | Reply only. No flash call and no reset tail in this image. The DLL name is `SaveHead4K`. | no |
 | `0x0002`, `0x0003` | Flash program. Both call the same write helper, and both refuse an address past `0x40000`. | no |
 | `0x0004` | Flash erase family. Calls the erase helper, same address ceiling. | no |
@@ -115,13 +115,13 @@ Every handler starts from the same OUT buffer. Byte 0 is the report id `0x81`. T
 | Bytes | What the handler does | Sent |
 | --- | --- | --- |
 | `81 05 00 21 01` | Identify. Reply payload `22`, version `6d 00 00 00`, product id `1b 30` (or `1d 30` when the wired DInput flag is set), the uint16 from flash `0x77000` at payload bytes 7-8 (default 1), then the DInput flag byte at payload byte 9. `tools/identify.py` decodes this. | yes |
-| `81 05 00 31 01` | Replies with payload byte `0x32` and nothing else. | no |
+| `81 05 00 31 01` | Replies with payload byte `0x32` and nothing else. | yes, `04_probes`: `02 32` |
 | `81 05 00 38` | Replies with payload byte `0x39`, then samples four stick axes. | no |
 | `81 05 00 36` | Sets a mode flag and clears a block of state. No reply in the handler. | no |
 | `81 05 00 51 00` | Reset tail: the same two calls `0x0007` makes after its reply. | no |
 | `81 05 00 61 01 vv vv` | Writes the uint16 at report bytes 5-6 to flash `0x77000` (the product-string selector, see the settings section), then replies with payload byte `0x62`. | no |
 | `81 11 04 08 dd dd ll rr` | Rumble. The adapter's copy of this handler logs `timer left_vibration`: uint16 duration at bytes 5-6, left and right motor strength at bytes 7-8. The Ultimate 2 commit is `81 11 04 06`, and `06` is not compared anywhere in this image. | no |
-| `81 ?? 66 aa 63` | Get RF address. Reply `02 63`, the 5-byte radio address derived from the chip id, then version `0x6d`. Same command in the adapter (`getRFAddressCMD`). | no |
+| `81 ?? 66 aa 63` | Get RF address. Reply `02 63`, the 5-byte radio address derived from the chip id, a zero byte, then version `0x6d` as a uint32. After replying it stores request byte 1 into the RAM mode flag `0x843468`, so it is sent with byte 1 zero. Same command in the adapter (`getRFAddressCMD`). | yes, `04_probes`, as `81 00 66 aa 63` |
 | `81 ?? 66 aa 64 a0 a1 a2 a3 a4` | Set RF address. Zeroes the whole 26-byte settings record in RAM, copies the 5 bytes into its bytes 0-4, saves the record to flash `0x73000`, replies `02 64` plus the 5 bytes. This wipes the L4/R4 binds (they reload as defaults). Same command in the adapter (`setRFAddressCMD`). | no |
 | `81 ?? 66 aa 70` | Stores the byte at offset 1 and returns. | no |
 
