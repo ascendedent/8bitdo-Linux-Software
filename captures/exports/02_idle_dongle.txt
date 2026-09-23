@@ -1,0 +1,9 @@
+# Dongle with the controller off, 2026-09-23
+# 2dc8:301c product IDLE, bcdDevice 2.00, bus 3 address 29
+# One HID interface. Usage page 0xFFA0.
+# Input report 0x02, 63 bytes, EP 4 IN.
+# Output report 0x81, 63 bytes, EP 5 OUT.
+#
+# Ultimate Software V2 1.35 was restarted during the capture.
+# It sent no interrupt OUT and no vendor command.
+# The only interrupt event was the kernel cancelling and resubmitting a read.

@@ -6,13 +6,41 @@ IDs below are from public sources. Confirm each one with `tools/inventory.py` on
 
 | PID | Name | Where it was reported | Status here |
 | --- | --- | --- | --- |
-| `310a` | Ultimate 2C Wireless, XInput. Same ID on the 2.4 GHz dongle and on a USB cable. | usb.ids note by hayleox (2025-08-25); `lsusb` in [SDL issue 12219](https://github.com/libsdl-org/SDL/issues/12219); linux-hardware.org | Expected primary target |
-| `301b` | Ultimate 2C Wireless, Bluetooth, DirectInput | [PCGamingWiki](https://www.pcgamingwiki.com/wiki/Controller:8BitDo_Ultimate_2_Controller) | Unverified |
+| `310a` | Ultimate 2C Wireless, XInput. Same ID on the 2.4 GHz dongle and on a USB cable. | usb.ids note by hayleox (2025-08-25); `lsusb` in [SDL issue 12219](https://github.com/libsdl-org/SDL/issues/12219); linux-hardware.org | Seen on the cable and on the dongle with the controller on, 2026-09-23. bcdDevice `1.14`. Same three interfaces either way. |
+| `301b` | Ultimate 2C Wireless, Bluetooth, DirectInput | [PCGamingWiki](https://www.pcgamingwiki.com/wiki/Controller:8BitDo_Ultimate_2_Controller) | Unverified. The identify reply contained this value. The dongle itself did not enumerate as `301b`. The 1.09 image plants `301b` in its identify reply and in its Bluetooth PnP record, and also carries a `301d` device descriptor for the wired DInput personality. |
+| `301d` | Ultimate 2C Wired Controller, the DInput personality inside the 1.09 image. Identify reports it instead of `301b` while the DInput flag is set (B held at power-on). One HID interface, 145-byte report descriptor. | `docs/firmware.md` | Not seen on the bench. |
+| `301c` | Dongle while the controller is off. USB product string is `IDLE`. bcdDevice `2.00`. One HID interface. | Seen 2026-09-23 for about six seconds after the dongle was plugged, then replaced by `310a` when the controller connected. | Seen. A serial string is present. It was not written down. |
 | `310b` | Ultimate 2 Wireless, USB / dongle, XInput | PCGamingWiki | Comparison device, not the 2C |
 | `6012` | Ultimate 2 Wireless, DInput. SDL treats this as the Bluetooth-mode product. A macOS report also saw `6012` on the dongle in DInput. | SDL `usb_ids.h`; [SDL issue 14902](https://github.com/libsdl-org/SDL/issues/14902) | Comparison device |
 | `6013` | Ultimate 2 Wireless dongle | Field notes, community report | Unverified. Conflicts with the `310b` / `6012` reports above until someone plugs one in. |
 | `3208` | Shared bootloader | Field notes | **Never send traffic.** |
 | `5750` | Older 8BitDo bootloader | Public USB ID tables (devicekb) | **Never send traffic.** Not known to be the 2C's bootloader. |
+
+## What Ultimate Software V2 1.35 calls these ids
+
+Read from the `VIDPID` static constructor in the managed assembly embedded in the V2 1.35 exe (2026-09-23). The names are 8BitDo's own. `QINGCHUN` is the internal name for the 2C line.
+
+| PID | V2 constant | Where V2 uses it |
+| --- | --- | --- |
+| `310a` | `PID_QINGCHUN2` | Platform selector and firmware update page only. `SelectPlatform.hideall` returns true for it, which hides every config page. No `Advance` (config) class references it. |
+| `301c` | `PID_QINGCHUN2RR` | The 2C receiver. Same `hideall` treatment. Update page only. |
+| `301a` | `PID_UltimateBT2C` | A Bluetooth 2C id. Update page only, and it is in the `dinputBoot` DFU-boot broadcast list. Not seen on this hardware. Its 1.01 firmware image (update type 108) is encrypted end to end, so its report set is unknown. |
+| `301b` | not in the table | The id the 2C returns in its identify reply. V2 never compares against it. |
+| `310b` | `PID_Xinput` | Generic XInput id. |
+| `3109` | `PID_IDLE` | The older idle receiver. |
+| `3208` | none, compared as a literal with `Boot.BootPID` | Bootloader. **Never send traffic.** |
+| `5750` | `PID_NGCDIY` | **Never send traffic.** |
+| `6012`, `6013` | `PID_Ultimate2`, `PID_Ultimate2RR` | Ultimate 2 pad and receiver. `Ultimate2_4Advance2UI` configures these with the 1592-byte image. |
+| `600f`, `6011` | `PID_UltimateBT2`, `PID_UltimateBT2RR` | Ultimate BT2 pad and receiver, `0xad0`-byte image. |
+| `6009`, `600a`, `600d` | `PID_Pro3`, `PID_Pro3USB`, `PID_Pro3DOCK` | Pro 3, `0x92c`-byte image. |
+| `600b`, `600c` | `PID_HitBox`, `PID_HitBoxRR` | HitBox, `0x92c`-byte image. |
+| `2062`, `2085` | `PID_HitBox2`, `PID_HitBox2Adapter` | HitBox 2, `0xa68`-byte image, two profiles. |
+| `6003`, `3010`, `6006` | `PID_Pro2`, `PID_Pro2_Wired`, `PID_Pro2_CY` | Pro 2 family, `0x674`-byte image. |
+| `6007`, `3106` | `PID_UltimateBT`, `PID_UltimateBTRR` | Ultimate BT, `0x914`-byte image. |
+| `3011`, `3012`, `3013` | `PID_Ultimate_PC`, `PID_Ultimate2_4`, `PID_Ultimate2_4RR` | Ultimate wired and 2.4G, 20-key map profiles. |
+| `2066`, `207d` | `PID_Ultimate3CPLUS`, `PID_Ultimate3CPLUSAdapter` | Ultimate 3C Plus. Not examined. |
+
+So the 2C is known to this build by name, and the build deliberately routes it to firmware only. That is the whole answer to "does V2 1.35 configure the 2C": no, by design of the platform selector, not by a missing device id.
 
 Kernel: `310a` is in `xpad` since Linux 6.12. This workstation is on `7.2.0-359.vanilla.fc44`, so the XInput interface should bind to `xpad` without a patch.
 

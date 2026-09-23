@@ -1,0 +1,30 @@
+3-5.1: 2dc8:301c  IDLE
+  known as: unknown 8BitDo product
+  bus 3 address 44
+  serial string is present; not printed
+  wireshark: usbmon3  filter usb.device_address == 44
+  vendor usage page present: config channel candidate
+  interface 00: class 03/00/00  HID
+    hidraw29: 8BitDo IDLE  42 byte descriptor
+      usage pages: 0xffa0
+      vendor pages: 0xffa0
+      report ids: 0x02, 0x81
+
+3-5.2.2.2: 2dc8:310a  8BitDo Ultimate 2C Wireless Controller
+  known as: Ultimate 2C Wireless, XInput (dongle and cable)
+  bus 3 address 43
+  serial string is present; not printed
+  wireshark: usbmon3  filter usb.device_address == 43
+  vendor usage page present: config channel candidate
+  interface 00: class ff/5d/01  vendor, XInput-style (xpad claims ff/5d/01)
+    no hidraw node
+  interface 01: class 03/01/01  HID
+    hidraw30: 8BitDo 8BitDo Ultimate 2C Wireless Controller  166 byte descriptor
+      usage pages: 0x0001, 0x0007, 0x0008, 0x000c, 0x0009
+      report ids: 0x01, 0x02, 0x03
+  interface 02: class 03/00/00  HID
+    hidraw31: 8BitDo 8BitDo Ultimate 2C Wireless Controller  33 byte descriptor
+      usage pages: 0xff7a
+      vendor pages: 0xff7a
+      report ids: 0x02, 0x81
+

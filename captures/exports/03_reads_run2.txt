@@ -1,0 +1,27 @@
+11:16:53 open /dev/hidraw21
+11:16:53 out identify        64 81050021010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+11:16:53 in  identify        64 02226d0000001b300100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+11:16:53 out identify        64 8105c100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+11:16:53 in  identify        64 02050000c1000000000000000000000000000000000008348400f033840000100000000000000000000000000000000000000000000000000000000000000000
+11:16:53 out u2read@0x0      64 813e04020000002d0000003806000000000000cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+11:16:53 in  u2read@0x0     timeout
+11:16:53     u2read: no progress at 0x0 (timeout)
+11:16:53 out u2read@0x0      64 813e04020000002d0000003806000000000000cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+11:16:54 in  u2read@0x0     timeout
+11:16:54     u2read: no progress at 0x0 (timeout)
+11:16:54 out u2read@0x0      64 813e04020000002d0000003806000000000000cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+11:16:55 in  u2read@0x0     timeout
+11:16:55     u2read: no progress at 0x0 (timeout)
+11:16:55     u2read: nothing readable
+11:16:55 out custom@0x0      64 813e040ccccccccccccccc2dcc30020000cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+11:16:56 in  custom@0x0     timeout
+11:16:56     custom: no progress at 0x0 (timeout)
+11:16:56 out custom@0x0      64 813e040ccccccccccccccc2dcc30020000cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+11:16:57 in  custom@0x0     timeout
+11:16:57     custom: no progress at 0x0 (timeout)
+11:16:57 out custom@0x0      64 813e040ccccccccccccccc2dcc30020000cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+11:16:57 in  custom@0x0     timeout
+11:16:57     custom: no progress at 0x0 (timeout)
+11:16:57     custom: nothing readable
+11:16:57 out readCRC         64 8105c30000000c000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+11:16:57 in  readCRC         64 02050000c3000c0000000000000000000000ffff0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000

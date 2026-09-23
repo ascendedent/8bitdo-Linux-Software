@@ -16,6 +16,7 @@ One setting change per file. Numbers match the log in `docs/capture-log.md`.
 | `09_profile2` | Same edit saved to profile 2 | Profile slot field |
 | `10_macro` | Record a short macro | Multi-packet writes |
 | `11_reset` | Reset to defaults | Factory reset command |
+| `03_reads` | Not V2. `tools/read_config.py` probes, 2026-09-23 | Which read commands the 2C answers. See `docs/capture-log.md`. |
 
 Store the pcapng here. `exports/` is for the `tshark` text dumps used when diffing.
 

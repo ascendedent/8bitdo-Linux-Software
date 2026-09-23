@@ -9,3 +9,7 @@ captures/*.pcapng
 captures/*.txt
 captures/*.bin
 backups/
+vendor/
+vendor/v2_app.dll
+.pydeps/
+vendor/firmware/

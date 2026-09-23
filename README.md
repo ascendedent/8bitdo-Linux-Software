@@ -1,61 +1,98 @@
 # Ultimate 2C config protocol
 
-Read and write the settings Ultimate Software V2 stores in an 8BitDo Ultimate 2C Wireless: stick deadzones and curves, trigger ranges, vibration strength, button maps, macros, profiles.
+What Ultimate Software V2 actually sends to an 8BitDo Ultimate 2C Wireless, and what it does not.
 
-Input reports are already decoded elsewhere. This repo is the config channel, which is not.
+On 2026-09-23, V2 1.35 identified the controller and offered firmware. It did not read or write stick deadzones, trigger ranges, vibration, button maps, macros, or profiles. Those editors exist in this build for the Ultimate 2. The 2C has a product name and no profile data. L4 and R4 on this pad are the onboard Mapping button.
 
-The controller was not attached when this folder was created (2026-09-22, Fedora, kernel `7.2.0-359.vanilla.fc44`). The next real step needs the dongle or a cable.
+Details are in `spec/protocol.md`.
 
-## Start here when the controller is plugged in
+## What was observed
+
+Cable and dongle, controller on, are the same device: `2dc8:310a`, firmware `1.14`.
+
+| Interface | What it is |
+| --- | --- |
+| 0 | XInput, owned by `xpad` |
+| 1 | Keyboard, consumer control, and a small mouse |
+| 2 | Vendor page `0xFF7A`. Output report `81`, input report `02`. This is the channel V2 uses. |
+
+V2 sent two commands and stopped:
+
+| Direction | Payload |
+| --- | --- |
+| Out | `81 05 00 21 01` |
+| In | `02 22 6d 00 00 00 1b 30 01` |
+| Out | `81 05 c1 00` |
+| In | `02 05 00 00 c1 00`, then later in the packet `08 34 84 00 f0 33 84 00 00 10` |
+
+The first reply contains `1b 30`, little-endian `0x301b`. Holding B or X while plugging the cable did not change the USB identity. With the controller off, the dongle stays `2dc8:301c`, product `IDLE`, and V2 sends it nothing.
+
+The Pro 2 config read (`81 3e 04`, looping `02 00` chunks) did not appear. Do not send those bytes.
+
+## What the firmware says
+
+The 1.09 image the pad is running was fetched from 8BitDo's update server and disassembled (`docs/firmware.md`). It settles most of the questions the captures left open:
+
+- Report `81` has an updater (the class `05` commands V2's DLL names), identify, rumble, RF address get and set, a product-string selector, and nothing else. There is no settings read and no settings write.
+- The L4/R4 binds are four 32-bit button masks in a 26-byte record at flash `0x73000`, set only by the on-pad combo. No host command reads or writes them.
+- The receiver (`301c`) answers report `81` itself and never relays it to the pad, so the dongle is not a way in either.
+- Firmware 1.06 has the same command set. The Bluetooth 2C (`301a`) image is encrypted, and V2 1.35 routes that id to firmware-only as well.
+
+## Still open
+
+Bluetooth. Public reports call DirectInput mode `2dc8:301b`, and the 1.09 image plants that id in its identify reply and its Bluetooth PnP record. The workstation's MediaTek MT7925 Bluetooth USB device dropped off the bus on 2026-09-23 and needs a reboot before it can be inventoried. That is the last channel where the pad could have a different report set.
+
+## Help wanted: Ultimate 2 owners on Linux
+
+The 2C turned out to have no host-side config channel at all, so this repo cannot grow into a general 8BitDo config tool on the 2C alone. The next device that matters is the **Ultimate 2 Wireless** (`2dc8:6012` in DInput, `310b`/`6013` on the dongle), because V2 reads and writes a 1592-byte config image on it and this repo already knows that image's layout from the V2 binaries. What is missing is one real image from a real pad. If you have one and run Linux, this takes about ten minutes and sends the pad nothing V2 does not send on every connect.
+
+What the tools do and do not do:
+
+- `tools/inventory.py` walks sysfs and prints descriptors. It sends nothing.
+- `tools/read_config.py --pid 6012` sends only the config **read** V2 issues when the pad connects (request 2, in 45-byte chunks). Every packet is checked against an allowlist before it leaves; writes, commits, firmware commands, and the bootloader ids are refused in code, and there is a test for that.
+- Nothing is written to the pad. Nothing is flashed. The pad's own settings are not changed.
+
+Steps:
 
 ```
-python3 tools/inventory.py
+git clone https://github.com/ascendedent/ultimate-2c
+cd ultimate-2c
+sudo cp udev/71-8bitdo.rules /etc/udev/rules.d/ && sudo udevadm control --reload-rules && sudo udevadm trigger
+# unplug and replug the pad (USB cable, DInput mode, so it shows up as 6012)
+python3 tools/inventory.py | tee inventory.txt
+python3 tools/read_config.py --pid 6012 --summary
 ```
 
-That only reads sysfs. It prints every `2dc8` device, the interfaces, the hidraw node, and whether any report descriptor has a vendor usage page (`0xFF00` or higher). That page is the config-channel candidate. It also prints the usbmon interface and the Wireshark device-address filter for the capture.
+If `inventory.py` shows the pad as `310b` or `6013` instead, run the read with that `--pid`. If it shows more than one matching device, add `--path <name>` with the sysfs name it printed. The read writes a transcript and, on success, a 1592-byte `..._u2.bin` under `captures/exports/`.
 
-Run it four times and keep the output:
+What to send back, as a GitHub issue or a pull request: `inventory.txt`, the transcript, and the `.bin`. Before you do, look at the `--summary` output: the image carries your three profile names and whatever you set in V2, and the transcript carries the pad's descriptors. The pad's USB serial is never printed. If any of that is private, say so and send just the summary.
 
-1. Dongle plugged in, controller off.
-2. Dongle, controller on, however it powers on by default.
-3. USB cable.
-4. After the Home+B power-on combo (reported as DInput on the 2.4 GHz link; not yet confirmed on this hardware).
-
-Paste each run into `docs/capture-log.md`.
-
-Then, before any capture, open Ultimate Software V2 and write down every setting it shows for the 2C. That list is the feature scope.
-
-## What is already known
-
-- `2dc8:310a` is the 2C in XInput, and public reports say the dongle and the cable share that ID. Bluetooth DirectInput is reported as `2dc8:301b`. Confirm both locally.
-- In XInput the kernel's `xpad` driver takes interface 0. A second interface enumerates as a USB HID keyboard and mouse. That second interface is the first place to look. Details and sources are in `docs/device-ids.md`.
-- SDL's 8BitDo driver does not claim `310a`. Its feature reports (`0x06`, `0x30`) and its rumble output (`0x05`) belong to other models. They are documented in `docs/sdl-channel.md` so a capture can be sorted into "input channel" and "everything else".
-- The Pro 2 config protocol (report `0x81`, read command `02 00`, write `01 00`, finish `06` with subrequest `21`, 45-byte chunks) is the V1-era pattern to test against the baseline capture. It is a hypothesis. See `docs/v1-framing.md`. Do not send those bytes.
-
-## What is not known
-
-All of these are open until a capture answers them. The empty spec is `spec/protocol.md`.
-
-- Does V2 configure the 2C over the dongle, or only over a cable?
-- Feature reports on a vendor page, or interrupt reports on the second interface?
-- A separate commit command, or does every write go straight to flash?
-- Checksum, sequence counter, or both?
-- Same framing as the Pro 2, or a V2 framing shared with the Ultimate 2 Wireless and the Pro 3?
+If you also have a Windows machine or Wine with Ultimate Software V2, the second-most useful thing is a usbmon capture of V2 changing one setting (a stick dead zone, say) and saving; `docs/capture-log.md` has the Wireshark filters. That is optional.
 
 ## Layout
 
 | Path | What it is |
 | --- | --- |
-| `docs/field-notes.md` | The original brief, including the capture plan and the prior art. |
+| `docs/field-notes.md` | The original brief and the capture plan. |
 | `docs/device-ids.md` | IDs, with the source and whether we have seen them. |
+| `docs/cable-inventory.md` | USB cable descriptors. |
+| `docs/firmware.md` | The fetched firmware images, the report `81` command tables for the pad and the receiver, and where the pad stores its settings. |
 | `docs/sdl-channel.md` | Input-side commands from SDL, so they are not mistaken for config. |
-| `docs/v1-framing.md` | Pro 2 packet shape as a hypothesis. |
+| `docs/v1-framing.md` | Pro 2 packet shape. Tested against the baseline and not what V2 sent. |
 | `docs/safety.md` | What does not get sent. |
-| `docs/capture-log.md` | One row per capture. Empty. |
-| `spec/protocol.md` | The spec. Empty on purpose. |
+| `docs/capture-log.md` | Capture log. |
+| `spec/protocol.md` | The spec. |
 | `tools/inventory.py` | Read-only USB inventory. |
+| `tools/identify.py` | Replays the two captured identify commands to `310a` only and decodes the reply. |
+| `tools/read_config.py` | Allowlisted reads. On the 2C: identify, `--probes`, `readCRC`; the two chunked reads it ignores are behind `--unanswered`. On an Ultimate 2 (`--pid 6012`): the config read V2 sends on connect, saved as an image. |
+| `tools/u2_summary.py` | Decodes a 1592-byte Ultimate 2 image into fields. No HID device. |
+| `tools/test_read_config.py`, `tools/test_identify.py`, `tools/test_u2_summary.py` | The allowlist, the identify decoder, and the image summary. No HID device. |
+| `docs/call-for-testers.md` | The post asking Ultimate 2 owners for a read. |
+| `tools/packets.py` | Builds the identify commands, the `custom_info` reads, and the Ultimate 2 write and commit. Does not send them. |
+| `tools/ultimate2_image.py` | Offsets of the stick, trigger, vibration, and other records in the 1592-byte image. |
+| `tools/test_packets.py` | Checks those bytes. No HID device. |
 | `udev/71-8bitdo.rules` | hidraw `uaccess` for `2dc8`, excluding bootloader PIDs `3208` and `5750`. Not installed. |
-| `captures/` | pcapng files. Gitignored, because descriptors can carry a serial. |
+| `captures/exports/` | The payload notes. pcapng files are gitignored. |
 
 ## Udev
 
