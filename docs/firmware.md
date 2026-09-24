@@ -127,6 +127,17 @@ Every handler starts from the same OUT buffer. Byte 0 is the report id `0x81`. T
 
 No handler reads the 1592-byte Ultimate 2 image or the 560-byte `custom_info` block. The section-`04` reader is absent, which is why those two reads got silence. The L4/R4 binds are in the `0x73000` settings record described below, and no report-`81` handler reads that record back out; `66 aa 64` is the only one that writes into it, and it zeroes the binds.
 
+## What receiver 1.03 removed: DInput over the dongle
+
+Prompted by a tester's remark that Home+B used to give DInput over the dongle and stopped with receiver 1.03. Both receiver images (1.00 and 1.03) still carry the DInput personality: a `301c` device descriptor at bcdDevice 0.01, a 41-byte configuration with one HID interface, and the 145-byte report descriptor (reports `01`, `02`, `81`). The configuration selector in both maps mode 1 to it, mode 4 to the idle `0xFFA0` personality, and anything else to the three-interface `310a`.
+
+What changed is the link handler in the RAM-resident code, the function that runs when the pad connects or drops (`0x904` in 1.00, `0x920` in 1.03, both keyed on the new link state):
+
+- **1.00**, on link: after the radio setup it reads the byte the pad sent with the link (`0x842f5e`); if it is `0x8f` it calls `init_usb_dinput` (`0xaae4`), which stores mode 1 and brings the DInput personality up; otherwise `init_usb_xinput`; `0x8d` then sets a separate halfword to 2.
+- **1.03**, on link: logs, does the same radio setup, and calls `init_usb_xinput` (`0xde28`) unconditionally. The `0x8f` branch is gone, the `0x8d` check remains, and the strings `init_usb_dinput` and `USB_MODE_DINPUT` are still in the image but nothing references them. No code path in 1.03 stores 1 into the mode byte: the two remaining writers store 4 (idle) or the value of the RF flag byte, which is 0 in normal operation.
+
+So the tester is right about the dongle: with 1.03 the pad can ask for DInput at power-on (Home+B sets its own DInput flag, which the pad image still has) and the receiver ignores the request. Bluetooth is the pad's own personality and is unaffected. Receiver 1.00, which V2's update page still offers, honours it. The one untraced door in 1.03 is the reboot path taken after `81 05 00 51 00` (`chanegBoot_Dinput`, which sets a retention bit and restarts); it may or may not land in the DInput personality, and nothing has been sent to find out.
+
 ## Report `81` commands in adapter 1.03
 
 Disassembled the same way from `u2c_adapter_1.03.dat` (header pid `301c`). The debug strings are not inline in code: they are a plain rodata block at offsets `0x89d0`-`0x9820`, referenced from literal pools as `0x6000` plus the offset, so each string maps to exactly one function. Nothing here has been sent to `301c`.
