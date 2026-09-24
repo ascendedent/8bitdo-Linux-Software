@@ -36,6 +36,8 @@ KNOWN_PIDS = {
     0x301A: "Ultimate 2C Bluetooth edition, V2 name PID_UltimateBT2C",
     0x600F: "Ultimate BT2 pad, 0xad0-byte config image in V2",
     0x6011: "Ultimate BT2 receiver",
+    0x3105: "Ultimate 2 Wireless, cable DInput as V2 names it (PID_USB_Ultimate2)",
+    0x3107: "Ultimate 2 Wireless dongle while idle, product string IDLE (seen by testers)",
 }
 
 USB_DEVICES = Path("/sys/bus/usb/devices")

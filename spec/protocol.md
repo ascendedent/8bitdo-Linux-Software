@@ -53,7 +53,7 @@ These are in the same updater. They have not been sent to the controller.
 
 `readUSBAdapter` reads a 560-byte (`0x230`) block the log calls `custom_info`. A BSS flag selects the body. The flag is zero when the process starts, and this DLL has no store to it, so the function takes the zero-flag path. The idle-dongle capture showed V2 never calling it.
 
-That path clamps each chunk to 45 bytes (`0x2d`) and wraps it with the same three-byte header the Pro 2 config read uses. Report id `81`, then a size byte, then section `04`. For the first chunk the size byte is `3e` and the HID write is 64 bytes:
+That path clamps each chunk to 45 bytes (`0x2d`) and wraps it with the header the Pro 2 config read uses. Report id `81`, then a size byte, then section `04`. **Correction, 2026-09-24:** the size byte is only there for the older products. The shared writer (real body `0x1040ec60`) sends `81 04 <body>` when the current id is `6009`, `2028`, `6012`, `600f`, `600b` or `2062`, and the Ultimate 2 pad image drops any packet whose byte 1 is not `04`. The 2C is not in that list, so the size-byte form below is what V2 sends to it. For the first chunk the size byte is `3e` and the HID write is 64 bytes:
 
 ```
 81 3e 04
@@ -257,6 +257,6 @@ What the 1.09 image stores, from `docs/firmware.md`. None of it is readable or w
 | Device | Same framing? | Evidence |
 | --- | --- | --- |
 | Pro 2 / SN30 Pro+ (V1, 8bitdo-spec) | Unknown | See `docs/v1-framing.md` |
-| Ultimate 2 Wireless | Same chunked read and write as the flag-set path. Total `0x638`. Request 2 reads, request 1 writes, then request 6 with argument `0x0123`. Checksum because PID `6012` is in the CRC list. | `readUltimate2` / `writeUltimate2` in V2 1.35. Not sent. |
+| Ultimate 2 Wireless | Same chunked read and write as the flag-set path, but framed `81 04 <body>` with no size byte, and chunk CRCs because `6012` is in the CRC list. Total `0x638`. Request 2 reads, request 1 writes, then request 6 with argument `0x0123`. The pad image handles all three in its section-`04` dispatcher (`docs/firmware.md`), on the cable DInput personality (`6012`, reports `01`/`02`/`81`) and on `310b`; through the dongle the receiver relays, except in the dongle's DInput `6012` personality, which has no report `81`. | `readUltimate2` / `writeUltimate2` in V2 1.35. Not sent. |
 | Pro 3 | Same header as the Ultimate 2 image, then a `0x92c`-byte `custom_config_record_t` with 22-key map profiles, `macro_fun`, `record_macro_fun`, and `x_rumble`. `getKey` adds Record as bit 19. | Managed structs and `readkey_map` in V2 1.35. Not sent. |
 | Ultimate 2C Bluetooth (`301a`) | Unknown. Firmware-only in V2 1.35 as well, and its 1.01 image is encrypted, so its report set cannot be read from the file. | `docs/firmware.md` |

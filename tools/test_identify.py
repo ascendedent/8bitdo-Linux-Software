@@ -100,6 +100,22 @@ class FindVendorInterfaceTests(unittest.TestCase):
         with self.assertRaises(SystemExit):
             find_vendor_interface(0x310A, "3-9")
 
+    def test_auto_pid_picks_the_one_pad_present(self) -> None:
+        fake_device(self.root, "1-1", 0x6012, [(VENDOR_PAGE_DESC, 5)])
+        self.assertEqual(identify.choose_pid(None, None), 0x6012)
+        fake_device(self.root, "1-2", 0x310A, [(VENDOR_PAGE_DESC, 6)])
+        with self.assertRaises(SystemExit):
+            identify.choose_pid(None, None)
+        self.assertEqual(identify.choose_pid(None, "1-2"), 0x310A)
+        self.assertEqual(identify.choose_pid(0x6012, None), 0x6012)
+        fake_bluetooth(self.hid_root, 0x301B, 3, VENDOR_PAGE_DESC, 9)
+        self.assertEqual(identify.choose_pid(None, "0005:2DC8:301B.0003"), 0x301B)
+
+    def test_selection_records_the_report_ids(self) -> None:
+        fake_device(self.root, "1-1", 0x6012, [(OTHER_VENDOR_DESC, 3)])
+        node = find_vendor_interface(0x6012)
+        self.assertEqual(identify.LAST_SELECTION[str(node)], {0x01})
+
     def test_no_vendor_page_is_not_opened_and_nodes_are_named(self) -> None:
         fake_device(self.root, "1-1", 0x6012, [(KEYBOARD_DESC, 5)])
         with self.assertRaises(SystemExit) as ctx:

@@ -24,14 +24,14 @@ class FieldPlans(unittest.TestCase):
         expected = u2.stick_record(5, 128, 7, 120, u2.ENABLE_MARK)
         self.assertEqual(plan.changed(), [(offset, plan.original[offset : offset + size], expected)])
         self.assertEqual(
-            plan.chunks, [packets.pro2_write_chunk(offset, u2.ULTIMATE2_SIZE, expected, nbytes=8, checksum=True)]
+            plan.chunks, [packets.pro2_write_chunk(offset, u2.ULTIMATE2_SIZE, expected, nbytes=8, checksum=True, size_byte=False)]
         )
         pkts = plan.packets()
         self.assertEqual(len(pkts), 2)
         self.assertTrue(all(len(p) == 64 and p[0] == 0x81 for p in pkts))
-        self.assertEqual(pkts[-1], packets.pad_report(packets.pro2_commit()))
+        self.assertEqual(pkts[-1], packets.pad_report(packets.pro2_commit(size_byte=False)))
         # The chunk carries the record's own CRC, since 6012 is a CRC product.
-        body = plan.chunks[0][3:]
+        body = plan.chunks[0][2:]  # 81 04, then the 16-byte header
         self.assertEqual(int.from_bytes(body[0:2], "little"), packets.PRO2_WRITE)
         self.assertEqual(int.from_bytes(body[4:8], "little") >> 16, packets.crc16_modbus(expected))
         self.assertEqual(int.from_bytes(body[12:16], "little"), offset)
@@ -40,7 +40,7 @@ class FieldPlans(unittest.TestCase):
         plan = fresh()
         plan_trigger(plan, 2, 10, 255, 10, 255)
         plan_vibration(plan, 0, 0.5, 0.25)
-        offsets = [c[3 + 12 : 3 + 16] for c in plan.chunks]
+        offsets = [c[2 + 12 : 2 + 16] for c in plan.chunks]
         self.assertEqual(
             [int.from_bytes(o, "little") for o in offsets],
             [u2.field_at("trigger", 2)[0], u2.field_at("vibration", 0)[0]],
@@ -74,14 +74,14 @@ class FullPlan(unittest.TestCase):
         self.assertEqual(len(plan.chunks), 36)
         total = 0
         for chunk in plan.chunks:
-            body = chunk[3:]
+            body = chunk[2:]
             length = int.from_bytes(body[4:8], "little") & 0xFFFF
             self.assertEqual(int.from_bytes(body[8:12], "little"), u2.ULTIMATE2_SIZE)
             self.assertEqual(int.from_bytes(body[12:16], "little"), total)
             self.assertEqual(body[16 : 16 + length], bytes(plan.image[total : total + length]))
             total += length
         self.assertEqual(total, u2.ULTIMATE2_SIZE)
-        self.assertEqual(plan.packets()[-1], packets.pad_report(packets.pro2_commit()))
+        self.assertEqual(plan.packets()[-1], packets.pad_report(packets.pro2_commit(size_byte=False)))
 
 
 if __name__ == "__main__":

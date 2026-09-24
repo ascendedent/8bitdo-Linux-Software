@@ -31,7 +31,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import packets  # noqa: E402
-from identify import PAD_PIDS, find_vendor_interface  # noqa: E402
+import identify  # noqa: E402
+from identify import PAD_PIDS, choose_pid, find_vendor_interface  # noqa: E402
 
 # Prefixes a packet must start with to be sent. Anything else is refused.
 ALLOWED_PREFIXES = (
@@ -46,9 +47,15 @@ ALLOWED_PREFIXES = (
 )
 
 
+# Set only by --switch-to-dinput --yes; the allowlist refuses the packet otherwise.
+SWITCH_ARMED = False
+
+
 def allowed(packet: bytes) -> bool:
     if len(packet) != 64 or packet[0] != 0x81:
         return False
+    if packet == packets.pad_report(packets.SWITCH_TO_DINPUT):
+        return SWITCH_ARMED
     for prefix in ALLOWED_PREFIXES:
         if packet.startswith(prefix):
             return True
@@ -57,7 +64,9 @@ def allowed(packet: bytes) -> bool:
         if body[0] == packets.CUSTOM_INFO_REQUEST and body[1] == packets.STACK_FILL:
             return True  # custom_info read, zero-flag form
         if int.from_bytes(body[0:2], "little") == packets.PRO2_READ:
-            return True  # chunked read, request 2
+            return True  # chunked read, request 2, size-byte frame
+    if packet[1] == 0x04 and int.from_bytes(packet[2:4], "little") == packets.PRO2_READ:
+        return True  # chunked read, request 2, no-size-byte frame (Ultimate 2 and the other CRC products)
     return False
 
 
@@ -97,13 +106,29 @@ class Session:
         self.drain()
         wrote = os.write(self.fd, packet)
         self.note(f"out {label:14s} {wrote:3d} {packet.rstrip(b'\\0').hex() or '81'}")
-        ready, _, _ = select.select([self.fd], [], [], self.timeout)
-        if not ready:
-            self.note(f"in  {label:14s} timeout")
-            return b""
-        data = os.read(self.fd, 64)
-        self.note(f"in  {label:14s} {len(data):3d} {data.hex()}")
-        return data
+        deadline = time.monotonic() + self.timeout
+        skipped = 0
+        while True:
+            left = deadline - time.monotonic()
+            ready, _, _ = select.select([self.fd], [], [], max(left, 0))
+            if not ready:
+                if skipped:
+                    self.note(f"    skipped {skipped} input report(s) that were not a reply")
+                self.note(f"in  {label:14s} timeout")
+                return b""
+            data = os.read(self.fd, 64)
+            # A reply to report 81 is input report 02. A pad in a gamepad
+            # personality streams its own input reports (id 01 on the
+            # Ultimate 2) on the same node; those are not replies.
+            if data and data[0] != 0x02:
+                skipped += 1
+                if skipped == 1:
+                    self.note(f"in  {label:14s} {len(data):3d} {data.hex()}  (input report id {data[0]:#04x}, not a reply; more like it are counted)")
+                continue
+            if skipped:
+                self.note(f"    skipped {skipped} input report(s) that were not a reply")
+            self.note(f"in  {label:14s} {len(data):3d} {data.hex()}")
+            return data
 
     def close(self) -> None:
         os.close(self.fd)
@@ -156,11 +181,18 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument(
         "--pid",
-        default="310a",
-        choices=[f"{p:04x}" for p in PAD_PIDS],
-        help="product id to open (default 310a, the 2C). On an Ultimate 2 the class 05 "
-        "commands are not sent and the chunked config read is.",
+        default="auto",
+        choices=["auto"] + [f"{p:04x}" for p in PAD_PIDS],
+        help="product id to open (default auto: the one pad attached). On the 2C the class 05 "
+        "commands are sent; on any other pad only the chunked config read V2 sends on connect.",
     )
+    ap.add_argument(
+        "--switch-to-dinput",
+        action="store_true",
+        help="send V2's switch-to-DInput command (81 05 00 51 00) instead of reading. The pad reboots "
+        "into its DInput personality; nothing else is sent. Requires --yes.",
+    )
+    ap.add_argument("--yes", action="store_true", help="confirm --switch-to-dinput")
     ap.add_argument("--path", help="sysfs device name from tools/inventory.py, when two match")
     ap.add_argument(
         "--node",
@@ -184,7 +216,7 @@ def main(argv: list[str] | None = None) -> int:
         "which firmware 1.09 does not answer",
     )
     args = ap.parse_args(argv)
-    pid = int(args.pid, 16)
+    pid = choose_pid(None if args.pid == "auto" else int(args.pid, 16), args.path)
     is_2c = pid == 0x310A
     if is_2c and not args.unanswered:
         # The 2C ignores both chunked reads (docs/firmware.md).
@@ -202,6 +234,26 @@ def main(argv: list[str] | None = None) -> int:
     log = Path(args.log)
     log.parent.mkdir(parents=True, exist_ok=True)
     sess = Session(node, log, args.timeout_ms)
+    sess.note(f"pad {pid:04x}: {PAD_PIDS.get(pid, '')}")
+    ids = identify.LAST_SELECTION.get(str(node))
+    if ids is not None and not {0x81, 0x02} <= ids:
+        sess.note(
+            f"    warning: this interface declares report ids {sorted(f'{i:#04x}' for i in ids)}, "
+            "not 81 and 02. It has no config channel; on an Ultimate 2 through its dongle in DInput "
+            "mode that is expected (docs/firmware.md). Use the cable, or the dongle in XInput mode."
+        )
+    if args.switch_to_dinput:
+        if not args.yes:
+            raise SystemExit("--switch-to-dinput reboots the pad into DInput mode; add --yes to send it")
+        global SWITCH_ARMED
+        SWITCH_ARMED = True
+        try:
+            sess.exchange(packets.pad_report(packets.SWITCH_TO_DINPUT), "switch_dinput")
+            sess.note("    sent. The pad reboots; run tools/inventory.py in a few seconds to see its new id.")
+        finally:
+            SWITCH_ARMED = False
+            sess.close()
+        return 0
     try:
         if "identify" not in args.skip:
             for payload in packets.IDENTIFY_COMMANDS:
@@ -213,7 +265,7 @@ def main(argv: list[str] | None = None) -> int:
             chunked_read(
                 sess, "u2read", packets.ULTIMATE2_TOTAL,
                 lambda off: packets.pad_report(
-                    packets.pro2_read_chunk(off, packets.ULTIMATE2_TOTAL, checksum=pid in packets.CRC_PIDS)
+                    packets.pro2_read_chunk(off, packets.ULTIMATE2_TOTAL, **packets.frame_for(pid))
                 ),
                 lambda reply: packets.parse_pro2_read_reply(reply, checksum=pid in packets.CRC_PIDS),
                 log.with_name(log.stem + "_u2.bin"), args.summary,

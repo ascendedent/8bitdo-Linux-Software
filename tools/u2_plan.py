@@ -71,7 +71,7 @@ class Plan:
 
     def packets(self) -> list[bytes]:
         """The chunks, then the commit, each as the 64-byte report V2 writes."""
-        return [packets.pad_report(c) for c in self.chunks] + [packets.pad_report(packets.pro2_commit())]
+        return [packets.pad_report(c) for c in self.chunks] + [packets.pad_report(packets.pro2_commit(size_byte=False))]
 
 
 def load(path: Path) -> bytes:
@@ -91,7 +91,7 @@ def _field_chunk(plan: Plan, name: str, profile: int, record: bytes, what: str) 
     if len(record) != size:
         raise ValueError(f"{name} record is {len(record)} bytes, field is {size}")
     plan.image[offset : offset + size] = record
-    plan.chunks.append(packets.pro2_write_chunk(offset, TOTAL, record, nbytes=size, checksum=True))
+    plan.chunks.append(packets.pro2_write_chunk(offset, TOTAL, record, nbytes=size, checksum=True, size_byte=False))
     plan.steps.append(f"{what}: one chunk of {size} bytes at {offset:#x}")
 
 
@@ -122,13 +122,13 @@ def plan_map(plan: Plan, profile: int, assignments: dict[str, str]) -> None:
             raise ValueError(f"unknown target {target}; one of {', '.join(u2.MAP_ENTRY_VALUES)}")
     flag = u2.ENABLE_MARK.to_bytes(4, "little")
     plan.image[flag_offset : flag_offset + 4] = flag
-    plan.chunks.append(packets.pro2_write_chunk(flag_offset, TOTAL, flag, nbytes=4, checksum=True))
+    plan.chunks.append(packets.pro2_write_chunk(flag_offset, TOTAL, flag, nbytes=4, checksum=True, size_byte=False))
     plan.steps.append(f"map profile {profile}: flag chunk at {flag_offset:#x}")
     for button, target in assignments.items():
         offset, size = u2.button_map_at(profile, u2.MAP_KEY_NAMES.index(button))
         value = u2.MAP_ENTRY_VALUES[target].to_bytes(4, "little")
         plan.image[offset : offset + size] = value
-        plan.chunks.append(packets.pro2_write_chunk(offset, TOTAL, value, nbytes=size, checksum=True))
+        plan.chunks.append(packets.pro2_write_chunk(offset, TOTAL, value, nbytes=size, checksum=True, size_byte=False))
         plan.steps.append(f"map profile {profile}: {button} -> {target}, chunk at {offset:#x}")
 
 
@@ -142,7 +142,7 @@ def plan_full(plan: Plan) -> None:
     n = 0
     while offset < TOTAL:
         length = min(packets.CUSTOM_INFO_CHUNK, TOTAL - offset)
-        plan.chunks.append(packets.pro2_write_chunk(offset, TOTAL, image[offset:], checksum=True))
+        plan.chunks.append(packets.pro2_write_chunk(offset, TOTAL, image[offset:], checksum=True, size_byte=False))
         offset += length
         n += 1
     plan.steps.append(f"full image: {n} chunks of up to {packets.CUSTOM_INFO_CHUNK} bytes")

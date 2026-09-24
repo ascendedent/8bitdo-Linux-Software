@@ -25,6 +25,12 @@ REPLY_PROBES = (
     ("get_pid", PROBE_GET_PID),
 )
 
+# V2's "switch to DInput" broadcast (Dinput.DinputNewBoot): changeDinput_CMD
+# with byte 4 forced to 0. On the Ultimate 2 pad image the handler writes
+# analog register 0x3c = 0x5a and reboots, and the pad comes back in its
+# DInput personality (6012 on a cable, with the 02/81 config reports).
+SWITCH_TO_DINPUT = bytes.fromhex("8105005100")
+
 CUSTOM_INFO_TOTAL = 0x230
 CUSTOM_INFO_CHUNK = 0x2D
 CUSTOM_INFO_REQUEST = 0x0C
@@ -64,13 +70,32 @@ def pad_report(payload: bytes) -> bytes:
     return payload + bytes(64 - len(payload))
 
 
-def _wrap_section(body: bytes) -> bytes:
-    """Report 81, size, section 04, then the body. Same wrapper for both reads."""
-    size = len(body) + 1
-    packet = bytes([0x81, size, 0x04]) + body
+# Products whose section-04 packets carry no size byte: 81 04 <body>. The
+# DLL's shared writer (real body 0x1040ec60) checks the current product id
+# against exactly this list; every other id gets 81 <size> 04 <body>.
+# 6012 is the Ultimate 2 Wireless, 6009 Pro 3, 600f Ultimate BT2, 600b
+# HitBox, 2062 HitBox 2; 2028 is not in VIDPID.
+NO_SIZE_BYTE_PIDS = frozenset({0x6009, 0x2028, 0x6012, 0x600F, 0x600B, 0x2062})
+
+
+def _wrap_section(body: bytes, *, size_byte: bool = True) -> bytes:
+    """Report 81, then section 04 and the body, with a size byte only for the older products.
+
+    The Ultimate 2 pad's dispatcher checks byte 1 for 04 and ignores the
+    packet otherwise, which is why 81 3e 04 got silence from it.
+    """
+    if size_byte:
+        packet = bytes([0x81, len(body) + 1, 0x04]) + body
+    else:
+        packet = bytes([0x81, 0x04]) + body
     if len(packet) > 64:
         raise ValueError(f"packet is {len(packet)} bytes")
     return packet
+
+
+def frame_for(pid: int) -> dict:
+    """Keyword arguments for the section-04 builders, from the product id."""
+    return {"checksum": pid in CRC_PIDS, "size_byte": pid not in NO_SIZE_BYTE_PIDS}
 
 
 def _chunk_length(offset: int, total: int) -> int:
@@ -116,7 +141,7 @@ def custom_info_chunk(offset: int) -> bytes:
     return _wrap_section(body)
 
 
-def pro2_read_chunk(offset: int, total: int, *, checksum: bool = False) -> bytes:
+def pro2_read_chunk(offset: int, total: int, *, checksum: bool = False, size_byte: bool = True) -> bytes:
     """Chunked read used when the custom_info flag is set, and by readUltimate2.
 
     Sixteen-byte body, then the chunk. Request uint16 is 2. The checksum is
@@ -134,7 +159,7 @@ def pro2_read_chunk(offset: int, total: int, *, checksum: bool = False) -> bytes
     body[8:12] = total.to_bytes(4, "little")
     body[12:16] = offset.to_bytes(4, "little")
     body[16:] = data
-    return _wrap_section(body)
+    return _wrap_section(body, size_byte=size_byte)
 
 
 def pro2_write_chunk(
@@ -144,6 +169,7 @@ def pro2_write_chunk(
     *,
     nbytes: int | None = None,
     checksum: bool = False,
+    size_byte: bool = True,
 ) -> bytes:
     """One write chunk. Request uint16 is 1. data is the config slice for this offset.
 
@@ -165,15 +191,15 @@ def pro2_write_chunk(
     body[8:12] = total.to_bytes(4, "little")
     body[12:16] = offset.to_bytes(4, "little")
     body[16:] = chunk
-    return _wrap_section(body)
+    return _wrap_section(body, size_byte=size_byte)
 
 
-def pro2_commit() -> bytes:
+def pro2_commit(*, size_byte: bool = True) -> bytes:
     """Command after the write chunks. Request 6, argument word 0x0123. No data."""
     body = bytearray(16)
     body[0:2] = PRO2_COMMIT.to_bytes(2, "little")
     body[2:4] = PRO2_COMMIT_ARG.to_bytes(2, "little")
-    return _wrap_section(bytes(body))
+    return _wrap_section(bytes(body), size_byte=size_byte)
 
 
 def parse_custom_info_reply(reply: bytes) -> bytes:

@@ -41,12 +41,12 @@ class FakeUltimate2(threading.Thread):
             if not packet:
                 return
             self.requests.append(packet)
-            # Report 81, a size byte that follows the chunk (3e for 45 bytes,
-            # 22 for the 17-byte tail of a 1592-byte image), section 04.
-            if packet[0] != 0x81 or packet[2] != 0x04 or packet[1] != 17 + (packet[7] | packet[8] << 8):
-                self.complaints.append(f"not a section-04 read: {packet[:4].hex()}")
+            # An Ultimate 2 takes 81 04 <body>; a size byte in between makes
+            # its dispatcher drop the packet (docs/firmware.md).
+            if packet[0] != 0x81 or packet[1] != 0x04:
+                self.complaints.append(f"not an Ultimate 2 section-04 packet: {packet[:4].hex()}")
                 continue
-            body = packet[3:]
+            body = packet[2:]
             request = int.from_bytes(body[0:2], "little")
             length_word = int.from_bytes(body[4:8], "little")
             length, crc = length_word & 0xFFFF, length_word >> 16
@@ -64,6 +64,9 @@ class FakeUltimate2(threading.Thread):
                 continue
             if not self.answer:
                 continue
+            # A real pad streams its input reports on the same node; make the
+            # tool skip one before every reply.
+            os.write(self.fd, bytes([0x01, 0x0F, 0x7F, 0x7F, 0x7F, 0x7F]) + bytes(28))
             reply = bytearray(64)
             reply[0:2] = bytes([0x02, 0x04])
             reply[2:4] = (4).to_bytes(2, "little")
@@ -103,6 +106,7 @@ class LoopbackRead(unittest.TestCase):
         self.assertEqual(len(fake.requests), 36)
         transcript = self.log.read_text()
         self.assertIn("complete, 1592 bytes", transcript)
+        self.assertIn("skipped 1 input report", transcript)
         self.assertIn("profile 0: name 'Racing'", transcript)
         # The 2C-only commands never went out on a 6012.
         self.assertNotIn("identify", transcript)
@@ -128,11 +132,13 @@ class LoopbackRead(unittest.TestCase):
         self.assertIn("udev/71-8bitdo.rules", str(ctx.exception))
 
     def test_first_chunk_matches_the_dll_shape(self) -> None:
-        first = packets.pro2_read_chunk(0, u2.ULTIMATE2_SIZE, checksum=True)
-        self.assertEqual(first[:3], bytes([0x81, 0x3E, 0x04]))
-        self.assertEqual(first[3:7], bytes([0x02, 0x00, 0x00, 0x00]))
-        self.assertEqual(first[11:15], bytes([0x38, 0x06, 0x00, 0x00]))
-        self.assertEqual(int.from_bytes(first[7:9], "little"), 0x2D)
+        first = packets.pro2_read_chunk(0, u2.ULTIMATE2_SIZE, **packets.frame_for(0x6012))
+        self.assertEqual(first[:2], bytes([0x81, 0x04]))
+        self.assertEqual(first[2:6], bytes([0x02, 0x00, 0x00, 0x00]))
+        self.assertEqual(first[10:14], bytes([0x38, 0x06, 0x00, 0x00]))
+        self.assertEqual(int.from_bytes(first[6:8], "little"), 0x2D)
+        older = packets.pro2_read_chunk(0, u2.ULTIMATE2_SIZE, **packets.frame_for(0x310A))
+        self.assertEqual(older[:3], bytes([0x81, 0x3E, 0x04]))
 
 
 if __name__ == "__main__":

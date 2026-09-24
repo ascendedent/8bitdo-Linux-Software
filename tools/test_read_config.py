@@ -32,8 +32,12 @@ class AllowlistTests(unittest.TestCase):
             "81050036",  # sets a mode flag
             "81050038",  # calibration reply, samples the sticks
             "8111040800",  # rumble
+            "8105005100",  # switch to DInput, refused unless armed by --switch-to-dinput --yes
         ):
             self.assertFalse(allowed(packets.pad_report(bytes.fromhex(payload))), payload)
+
+    def test_no_size_byte_read_frame_passes(self) -> None:
+        self.assertTrue(allowed(packets.pad_report(packets.pro2_read_chunk(0, 0x638, **packets.frame_for(0x6012)))))
 
     def test_writes_commit_and_init1_are_refused(self) -> None:
         for packet in (

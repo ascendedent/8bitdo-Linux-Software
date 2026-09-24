@@ -30,6 +30,7 @@ REFUSE = {
     0x3208: "bootloader",
     0x5750: "older bootloader",
     0x301C: "idle dongle; the captured commands were not sent to this device",
+    0x3107: "idle Ultimate 2 dongle; nothing is sent to it",
 }
 # Pads the read tool may open, by product id. Anything else is refused.
 PAD_PIDS = {
@@ -38,7 +39,11 @@ PAD_PIDS = {
     0x6013: "Ultimate 2 Wireless dongle",
     0x310B: "Ultimate 2 Wireless, XInput",
     0x301B: "Ultimate 2C over Bluetooth (the id in its PnP record; not yet seen)",
+    0x3105: "Ultimate 2 Wireless, cable DInput as V2 names it (PID_USB_Ultimate2); not yet seen",
+    0x6013: "Ultimate 2 Wireless receiver personality V2 configures (PID_Ultimate2RR); not yet seen",
 }
+# Refused as a pad but listed when present.
+IDLE_PIDS = {0x301C: "Ultimate 2C dongle, idle", 0x3107: "Ultimate 2 Wireless dongle, idle"}
 
 from packets import IDENTIFY_COMMANDS, IDENTIFY_GET_PID, IDENTIFY_INIT, pad_report
 
@@ -102,13 +107,57 @@ def hidraw_node(iface: Path) -> Path | None:
     return None
 
 
+def present_pads() -> list[tuple[int, str]]:
+    """(pid, sysfs name) of every attached device with a pad id, USB then Bluetooth."""
+    found: list[tuple[int, str]] = []
+    if SYSFS_ROOT.is_dir():
+        for dev in sorted(SYSFS_ROOT.iterdir()):
+            vid = dev / "idVendor"
+            if vid.is_file() and vid.read_text().strip().lower() == f"{VID:04x}":
+                pid = int((dev / "idProduct").read_text().strip(), 16)
+                if pid in PAD_PIDS:
+                    found.append((pid, dev.name))
+    if HID_ROOT.is_dir():
+        for hid in sorted(HID_ROOT.iterdir()):
+            parts = hid.name.split(":")
+            if len(parts) == 3 and parts[0] == BLUETOOTH_BUS and parts[1].lower() == f"{VID:04x}":
+                pid = int(parts[2].split(".")[0], 16)
+                if pid in PAD_PIDS:
+                    found.append((pid, hid.name))
+    return found
+
+
+def choose_pid(pid: int | None, path: str | None) -> int:
+    """Resolve --pid auto: the one pad present, or the one at path."""
+    if pid is not None:
+        return pid
+    pads = present_pads()
+    if path is not None:
+        pads = [p for p in pads if p[1] == path]
+    ids = sorted({p for p, _ in pads})
+    if len(ids) == 1:
+        return ids[0]
+    if not ids:
+        raise SystemExit("no pad with a known id is attached; tools/inventory.py lists what is")
+    raise SystemExit(
+        "more than one pad id is attached: "
+        + ", ".join(f"{p:04x} at {n}" for p, n in pads)
+        + ". Pass --pid or --path."
+    )
+
+
+LAST_SELECTION: dict = {}
+
+
 def find_vendor_interface(pid: int = CONTROLLER_PID, path: str | None = None) -> Path:
     """The hidraw node of the vendor-page interface of one attached pad.
 
     pid must be in PAD_PIDS. path is the sysfs device name (for example
     3-5.2.2.2, printed by tools/inventory.py) and is required when more
     than one matching device is attached, such as the pad on a cable and
-    on its dongle at the same time.
+    on its dongle at the same time. LAST_SELECTION records the report ids
+    the chosen interface declares, so a caller can warn when 81 and 02
+    are missing.
     """
     if pid not in PAD_PIDS:
         raise SystemExit(f"{pid:04x} is not a pad this tool opens")
@@ -137,10 +186,11 @@ def find_vendor_interface(pid: int = CONTROLLER_PID, path: str | None = None) ->
             if node is None:
                 raise SystemExit(f"{dev.name} interface {number} has no hidraw node")
             # The config channel declares output 81 and input 02; prefer it.
-            candidates.append((0 if CONFIG_REPORT_IDS <= ids else 1, min(pages), node))
+            candidates.append((0 if CONFIG_REPORT_IDS <= ids else 1, min(pages), node, ids))
         if candidates:
-            candidates.sort()
+            candidates.sort(key=lambda c: c[:2])
             matches.append((dev, candidates[0][2], candidates[0][1]))
+            LAST_SELECTION[str(candidates[0][2])] = candidates[0][3]
     # Bluetooth: one HID device per pad, no USB interface directories.
     if HID_ROOT.is_dir():
         for hid in sorted(HID_ROOT.iterdir()):
@@ -153,13 +203,14 @@ def find_vendor_interface(pid: int = CONTROLLER_PID, path: str | None = None) ->
                 continue
             if path is not None and hid.name != path:
                 continue
-            pages = pages_under(hid)
+            pages, ids = descriptor_facts(hid)
             if not pages:
                 continue
             node = hidraw_node(hid)
             if node is None:
                 raise SystemExit(f"{hid.name} has no hidraw node")
             matches.append((hid, node, min(pages)))
+            LAST_SELECTION[str(node)] = ids
     if len(matches) == 1:
         return matches[0][1]
     if len(matches) > 1:
