@@ -85,6 +85,19 @@ Same tool and packets as `04_probes`, `--path 3-5.1`. Every reply is the receive
 
 So the receiver runs firmware 1.03 (version byte `0x67`, matching the `u2c_adapter_1.03.dat` header), identifies as `301c`, has no product-string selector (bytes 8-9 zero), and reports its own 5-byte radio address, which differs from the one the pad reports on the cable. The two address bytes are redacted in the committed transcripts. The retest list above is closed: the dongle's report set is the one tabulated in `docs/firmware.md`, and a host on the dongle path is talking to the receiver.
 
+## Tester reports, 2026-09-23/24 (GitHub issues 1-6)
+
+Three volunteers with an Ultimate 2 Wireless ("8BitDo Ultimate 2 Wireless Controller for PC") ran the read tool. None got a config reply, and the descriptors they posted, together with the pad and receiver firmware images fetched the next morning, explain every line:
+
+| Issue | Connection | Id | Interfaces | What the tool did |
+| --- | --- | --- | --- | --- |
+| 1 (andromalandro), 4 (kropop) | dongle, DInput | `6012` | one HID, 113-byte descriptor, pages `0x01 0x02 0x09 0xff00 0x0f`, reports `01`, `05` | Opened it (vendor page `0xff00`), sent `81 3e 04 ...`, read the pad's 34-byte input reports back as "replies". No report `81` exists on this personality. |
+| 2 (andromalandro) | cable, XInput | `310b` | XInput + 166-byte keyboard/mouse + 33-byte `0xff7a` (`02`/`81`) | Run with `--pid 6012`; refused because only `310b` was present. |
+| 3 (kropop), 5 (ChibiChoko) | cable / dongle, XInput | `310b` | as above; ChibiChoko's dongle also showed idle `3107 IDLE` | Opened interface 2, sent `81 3e 04 ...` three times, silence. |
+| 6 (ChibiChoko) | cable, XInput | `310b` | as above | Inventory pasted into both fields; no read. |
+
+The pad image tests byte 1 of a report-`81` packet for `04` before dispatching section `04`; the DLL sends `81 04 <body>` to the Ultimate 2 and the size-byte form only to older products (`docs/firmware.md`). So the `310b` silence is the frame, and the `6012`-on-dongle result is the personality. The tool now builds the right frame per product id, picks the pad automatically, skips input reports while waiting for a reply, warns when the opened interface declares no `81`/`02`, and can send V2's switch-to-DInput command behind `--switch-to-dinput --yes`.
+
 ## Planned: Bluetooth, once the adapter is back
 
 1. Pair the pad (`bluetoothctl`, it should appear as `8BitDo Ultimate 2C Wireless Controller`). `tools/inventory.py` then lists it as `0005:2DC8:301B.<n>` with its report descriptor; save that as `08_inventory_bluetooth.txt`.

@@ -37,6 +37,7 @@ The 1.09 image the pad is running was fetched from 8BitDo's update server and di
 - The L4/R4 binds are four 32-bit button masks in a 26-byte record at flash `0x73000`, set only by the on-pad combo. No host command reads or writes them.
 - The receiver (`301c`) answers report `81` itself and never relays it to the pad, so the dongle is not a way in either. Confirmed on the wire: through the dongle, identify returns the receiver's version and id, not the pad's.
 - Firmware 1.06 has the same command set. The Bluetooth 2C (`301a`) image is encrypted, and V2 1.35 routes that id to firmware-only as well.
+- The Ultimate 2 Wireless images (pad and receiver) are readable too, and unlike the 2C the pad implements the section-`04` config channel: read, write, and commit handlers over a 1592-byte image, framed `81 04 <body>`, live on the cable DInput personality and on `310b`, and relayed by the receiver.
 
 ## Still open
 
@@ -56,14 +57,23 @@ Steps:
 
 ```
 git clone https://github.com/ascendedent/8bitdo-Linux-Software
-cd ultimate-2c
+cd 8bitdo-Linux-Software
 sudo cp udev/71-8bitdo.rules /etc/udev/rules.d/ && sudo udevadm control --reload-rules && sudo udevadm trigger
-# unplug and replug the pad (USB cable, DInput mode, so it shows up as 6012)
+# plug the pad in on its USB cable
 python3 tools/inventory.py | tee inventory.txt
-python3 tools/read_config.py --pid 6012 --summary
+python3 tools/read_config.py --summary
 ```
 
-If `inventory.py` shows the pad as `310b` or `6013` instead, run the read with that `--pid`. If it shows more than one matching device, add `--path <name>` with the sysfs name it printed. If the read tool says it found no interface with a vendor usage page, look at the inventory for the hidraw node whose report ids include `0x81` and `0x02` and pass it directly with `--node /dev/hidrawN`; that is the one V2 talks to. The read writes a transcript and, on success, a 1592-byte `..._u2.bin` under `captures/exports/`.
+The read tool picks the one pad it finds. Which connection works, from the Ultimate 2 firmware images (`docs/firmware.md`):
+
+- **Cable, XInput (`310b`)**: the config channel is on interface 2. Try this first; it needs no mode change.
+- **Cable, DInput (`6012`)**: the config channel is in the gamepad interface. If XInput gives no reply, `python3 tools/read_config.py --switch-to-dinput --yes` sends the one command Ultimate Software uses to reboot the pad into DInput mode, then run the read again. Home+X at power-on is the usual way back to XInput.
+- **Dongle in XInput (`310b`)**: the receiver relays to the pad. Also fine.
+- **Dongle in DInput (`6012`)**: no config channel; the tool warns and the pad only streams its input reports. Use the cable.
+
+If the tool sees more than one pad, add `--pid` or `--path <name>` from the inventory. If it says it found no interface with a vendor usage page, pass the hidraw node whose report ids include `0x81` and `0x02` with `--node /dev/hidrawN`.
+
+The first six tester reports (2026-09-23/24) were made with a tool that framed the read the way V2 frames it for older pads; the Ultimate 2 drops that frame, which is why they all got silence. Fixed the next day. Thank you to andromalandro, kropop and ChibiChoko for the descriptors and transcripts that showed it.
 
 What to send back, as a GitHub issue or a pull request: `inventory.txt`, the transcript, and the `.bin`. Before you do, look at the `--summary` output: the image carries your three profile names and whatever you set in V2, and the transcript carries the pad's descriptors. The pad's USB serial is never printed. If any of that is private, say so and send just the summary.
 
