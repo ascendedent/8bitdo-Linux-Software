@@ -15,6 +15,8 @@ IDs below are from public sources. Confirm each one with `tools/inventory.py` on
 | `6013` | Ultimate 2 Wireless receiver personality, `PID_Ultimate2RR` in V2, bcdDevice 2.00 in the receiver image | V2, receiver image | Not seen by any tester yet. The testers' dongles presented `6012` (DInput, 113-byte descriptor, no config reports) or `310b` (XInput, three interfaces). |
 | `3107` | Ultimate 2 Wireless dongle while idle, product string `IDLE`, 37-byte descriptor on page `0x008c` | Tester ChibiChoko, 2026-09-24; V2 names it `USB2_IDLE` | Seen. Nothing is sent to it. |
 | `3105` | `PID_USB_Ultimate2` in V2, used only for file paths and key tables | V2 | Not seen. |
+| `3019` | N64 Bluetooth Controller on a cable, `PID_N64BT` in V2 (update type 78). Interface 0: 155-byte descriptor, reports `01`, `21`, `22`, `02`, `81`; interface 1: keyboard. V2 gives it calibration only. | Tester ChibiChoko, 2026-09-24 | Seen. Identify only. |
+| `3004`, `9028`, `3021` | `PID_N64`, `PID_N64RR` (receiver; V2 flashes a 32 KB data block into it through `ReadN64RRData`/`WriteN64RRData`), `PID_N64JoySticks` | V2 | Not seen. |
 | `3208` | Shared bootloader | Field notes | **Never send traffic.** |
 | `5750` | Older 8BitDo bootloader | Public USB ID tables (devicekb) | **Never send traffic.** Not known to be the 2C's bootloader. |
 

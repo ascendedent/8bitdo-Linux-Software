@@ -111,6 +111,20 @@ class FindVendorInterfaceTests(unittest.TestCase):
         fake_bluetooth(self.hid_root, 0x301B, 3, VENDOR_PAGE_DESC, 9)
         self.assertEqual(identify.choose_pid(None, "0005:2DC8:301B.0003"), 0x301B)
 
+    def test_config_family(self) -> None:
+        self.assertEqual(identify.config_family(0x6012, ""), 0x6012)
+        self.assertEqual(identify.config_family(0x6013, ""), 0x6012)
+        self.assertEqual(identify.config_family(0x310B, "8BitDo Ultimate 2 Wireless Controller for PC"), 0x6012)
+        self.assertIsNone(identify.config_family(0x310B, "8BitDo Some Other Pad"))
+        self.assertIsNone(identify.config_family(0x3019, "8BitDo 64 Bluetooth Controller"))
+        self.assertIsNone(identify.config_family(0x310A, "8BitDo Ultimate 2C Wireless Controller"))
+
+    def test_product_string_is_recorded(self) -> None:
+        fake_device(self.root, "1-1", 0x310B, [(VENDOR_PAGE_DESC, 5)])
+        (self.root / "1-1" / "product").write_text("8BitDo Ultimate 2 Wireless Controller for PC\n")
+        node = find_vendor_interface(0x310B)
+        self.assertEqual(identify.LAST_PRODUCT[str(node)], "8BitDo Ultimate 2 Wireless Controller for PC")
+
     def test_selection_records_the_report_ids(self) -> None:
         fake_device(self.root, "1-1", 0x6012, [(OTHER_VENDOR_DESC, 3)])
         node = find_vendor_interface(0x6012)

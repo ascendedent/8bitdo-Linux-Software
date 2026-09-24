@@ -98,6 +98,12 @@ Three volunteers with an Ultimate 2 Wireless ("8BitDo Ultimate 2 Wireless Contro
 
 The pad image tests byte 1 of a report-`81` packet for `04` before dispatching section `04`; the DLL sends `81 04 <body>` to the Ultimate 2 and the size-byte form only to older products (`docs/firmware.md`). So the `310b` silence is the frame, and the `6012`-on-dongle result is the personality. The tool now builds the right frame per product id, picks the pad automatically, skips input reports while waiting for a reply, warns when the opened interface declares no `81`/`02`, and can send V2's switch-to-DInput command behind `--switch-to-dinput --yes`.
 
+## Tester reruns and a new pad, 2026-09-24 evening (issues 5, 6, 7)
+
+- ChibiChoko reran on the cable and on the dongle after pulling the frame fix, both as `310b`, and both still sent `81 3e 04 ...` and got silence. The fix keyed the frame on the enumerated id, and `310b` is V2's generic XInput id, not in the Ultimate 2 list, so an Ultimate 2 in XInput mode fell back to the older frame. The tool now decides the family from the USB product string (`Ultimate 2 Wireless`) when the id is `310b`, and frames as `6012`.
+- ChibiChoko also has a second dongle, the "USB Wireless Adapter 2", which is what showed as `3107 IDLE`; that id is V2's `USB2_IDLE`, so the inventory note stands.
+- ChibiChoko's N64 Bluetooth Controller on a cable: `3019`, product `8BitDo 64 Bluetooth Controller`, interface 0 with a 155-byte descriptor on pages `0x01 0x09 0x02 0x06 0x08 0x0f` and report ids `01 21 22 02 81`, interface 1 a 59-byte keyboard. V2 names it `PID_N64BT`, update type 78, and routes it to `CalibrationView` only (stick calibration through `writeHid`); the 32 KB `N64custom_config_record_t` and `ReadN64RRData` belong to the N64 receiver `9028`. So there is no config image to read on this pad. The tool now accepts `3019` and sends it the class-05 identify, which V2 sends every pad on connect, and nothing else.
+
 ## Planned: Bluetooth, once the adapter is back
 
 1. Pair the pad (`bluetoothctl`, it should appear as `8BitDo Ultimate 2C Wireless Controller`). `tools/inventory.py` then lists it as `0005:2DC8:301B.<n>` with its report descriptor; save that as `08_inventory_bluetooth.txt`.

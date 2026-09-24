@@ -71,6 +71,8 @@ The read tool picks the one pad it finds. Which connection works, from the Ultim
 - **Dongle in XInput (`310b`)**: the receiver relays to the pad. Also fine.
 - **Dongle in DInput (`6012`)**: no config channel; the tool warns and the pad only streams its input reports. Use the cable.
 
+The tool decides the protocol from the pad behind the id, not the id alone: `310b` is 8BitDo's generic XInput id, so it reads the USB product string to tell an Ultimate 2 from anything else. Other pads it knows (the 2C, the N64 Bluetooth) get the identify command only, since Ultimate Software has no config read for them.
+
 If the tool sees more than one pad, add `--pid` or `--path <name>` from the inventory. If it says it found no interface with a vendor usage page, pass the hidraw node whose report ids include `0x81` and `0x02` with `--node /dev/hidrawN`.
 
 The first six tester reports (2026-09-23/24) were made with a tool that framed the read the way V2 frames it for older pads; the Ultimate 2 drops that frame, which is why they all got silence. Fixed the next day. Thank you to andromalandro, kropop and ChibiChoko for the descriptors and transcripts that showed it.

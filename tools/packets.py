@@ -94,7 +94,12 @@ def _wrap_section(body: bytes, *, size_byte: bool = True) -> bytes:
 
 
 def frame_for(pid: int) -> dict:
-    """Keyword arguments for the section-04 builders, from the product id."""
+    """Keyword arguments for the section-04 builders, from the product id.
+
+    Pass the id whose protocol applies (identify.config_family), not the
+    enumerated one: an Ultimate 2 in XInput mode enumerates as 310b but
+    still wants the 6012 frame and CRC.
+    """
     return {"checksum": pid in CRC_PIDS, "size_byte": pid not in NO_SIZE_BYTE_PIDS}
 
 

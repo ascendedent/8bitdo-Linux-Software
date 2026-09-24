@@ -41,7 +41,17 @@ PAD_PIDS = {
     0x301B: "Ultimate 2C over Bluetooth (the id in its PnP record; not yet seen)",
     0x3105: "Ultimate 2 Wireless, cable DInput as V2 names it (PID_USB_Ultimate2); not yet seen",
     0x6013: "Ultimate 2 Wireless receiver personality V2 configures (PID_Ultimate2RR); not yet seen",
+    0x3019: "N64 Bluetooth Controller on a cable (PID_N64BT). V2 gives it calibration only, no config image",
 }
+# Pads whose config channel is the Ultimate 2 protocol regardless of the id
+# they enumerate with. 310b is V2's generic XInput id, so the product string
+# decides; the Ultimate 2 firmware is the same in both personalities and
+# takes the 81 04 frame in both.
+ULTIMATE2_PRODUCT = "Ultimate 2 Wireless"
+CONFIG_PIDS = {0x6012, 0x6013, 0x310B}
+# Ids the tool only identifies (class 05, what V2 sends every pad on connect);
+# no chunked read exists for them in V2.
+IDENTIFY_ONLY_PIDS = {0x310A, 0x3019}
 # Refused as a pad but listed when present.
 IDLE_PIDS = {0x301C: "Ultimate 2C dongle, idle", 0x3107: "Ultimate 2 Wireless dongle, idle"}
 
@@ -147,6 +157,25 @@ def choose_pid(pid: int | None, path: str | None) -> int:
 
 
 LAST_SELECTION: dict = {}
+LAST_PRODUCT: dict = {}
+
+
+def product_string(dev: Path) -> str:
+    f = dev / "product"
+    return f.read_text().strip() if f.is_file() else ""
+
+
+def config_family(pid: int, product: str) -> int | None:
+    """The product id whose config protocol applies, or None when V2 has none for it.
+
+    6012 and 6013 are the Ultimate 2 outright. 310b is V2's generic XInput id,
+    so it counts only when the USB product string names the Ultimate 2.
+    """
+    if pid in (0x6012, 0x6013):
+        return 0x6012
+    if pid == 0x310B and ULTIMATE2_PRODUCT in product:
+        return 0x6012
+    return None
 
 
 def find_vendor_interface(pid: int = CONTROLLER_PID, path: str | None = None) -> Path:
@@ -191,6 +220,7 @@ def find_vendor_interface(pid: int = CONTROLLER_PID, path: str | None = None) ->
             candidates.sort(key=lambda c: c[:2])
             matches.append((dev, candidates[0][2], candidates[0][1]))
             LAST_SELECTION[str(candidates[0][2])] = candidates[0][3]
+            LAST_PRODUCT[str(candidates[0][2])] = product_string(dev)
     # Bluetooth: one HID device per pad, no USB interface directories.
     if HID_ROOT.is_dir():
         for hid in sorted(HID_ROOT.iterdir()):

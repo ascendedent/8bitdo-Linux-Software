@@ -32,7 +32,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import packets  # noqa: E402
 import identify  # noqa: E402
-from identify import PAD_PIDS, choose_pid, find_vendor_interface  # noqa: E402
+from identify import IDENTIFY_ONLY_PIDS, PAD_PIDS, choose_pid, config_family, find_vendor_interface  # noqa: E402
 
 # Prefixes a packet must start with to be sent. Anything else is refused.
 ALLOWED_PREFIXES = (
@@ -218,13 +218,15 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
     pid = choose_pid(None if args.pid == "auto" else int(args.pid, 16), args.path)
     is_2c = pid == 0x310A
-    if is_2c and not args.unanswered:
-        # The 2C ignores both chunked reads (docs/firmware.md).
+    if pid in IDENTIFY_ONLY_PIDS and not args.unanswered:
+        # No chunked read exists for these in V2: the 2C ignores both
+        # (docs/firmware.md) and the N64 Bluetooth pad only gets calibration.
         args.skip = list(args.skip) + ["u2", "custom"]
     if not is_2c:
-        # The class 05 commands are the 2C's; other pads get only the read
-        # V2 itself sends them, request 2 with the checksum their id requires.
-        args.skip = list(args.skip) + ["identify", "crc", "custom"]
+        # Only the 2C gets readCRC and the probes. Every pad gets the class 05
+        # identify, which V2 sends to each one on connect; pads with a config
+        # channel get the read V2 sends them, framed for their family.
+        args.skip = list(args.skip) + ["crc", "custom"]
         args.probes = False
     if args.log is None:
         # Under the repo's captures/exports/ whatever the working directory is.
@@ -235,6 +237,12 @@ def main(argv: list[str] | None = None) -> int:
     log.parent.mkdir(parents=True, exist_ok=True)
     sess = Session(node, log, args.timeout_ms)
     sess.note(f"pad {pid:04x}: {PAD_PIDS.get(pid, '')}")
+    family = config_family(pid, identify.LAST_PRODUCT.get(str(node), ""))
+    if family is not None and family != pid:
+        sess.note(f"    config protocol: {family:04x} (from the product string)")
+    if family is None and pid not in IDENTIFY_ONLY_PIDS and "u2" not in args.skip:
+        sess.note(f"    no config protocol is known for {pid:04x}; sending identify only")
+        args.skip = list(args.skip) + ["u2"]
     ids = identify.LAST_SELECTION.get(str(node))
     if ids is not None and not {0x81, 0x02} <= ids:
         sess.note(
@@ -265,9 +273,9 @@ def main(argv: list[str] | None = None) -> int:
             chunked_read(
                 sess, "u2read", packets.ULTIMATE2_TOTAL,
                 lambda off: packets.pad_report(
-                    packets.pro2_read_chunk(off, packets.ULTIMATE2_TOTAL, **packets.frame_for(pid))
+                    packets.pro2_read_chunk(off, packets.ULTIMATE2_TOTAL, **packets.frame_for(family or pid))
                 ),
-                lambda reply: packets.parse_pro2_read_reply(reply, checksum=pid in packets.CRC_PIDS),
+                lambda reply: packets.parse_pro2_read_reply(reply, checksum=(family or pid) in packets.CRC_PIDS),
                 log.with_name(log.stem + "_u2.bin"), args.summary,
             )
         if "custom" not in args.skip:

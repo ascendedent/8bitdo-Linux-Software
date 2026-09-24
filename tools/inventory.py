@@ -38,6 +38,10 @@ KNOWN_PIDS = {
     0x6011: "Ultimate BT2 receiver",
     0x3105: "Ultimate 2 Wireless, cable DInput as V2 names it (PID_USB_Ultimate2)",
     0x3107: "Ultimate 2 Wireless dongle while idle, product string IDLE (seen by testers)",
+    0x3019: "N64 Bluetooth Controller on a cable (PID_N64BT); V2 offers calibration only",
+    0x3004: "N64 controller, V2 PID_N64 (update type 71)",
+    0x9028: "N64 receiver, V2 PID_N64RR; V2 flashes a 32 KB data block into it",
+    0x3021: "N64 joysticks, V2 PID_N64JoySticks",
 }
 
 USB_DEVICES = Path("/sys/bus/usb/devices")
